@@ -17,3 +17,6 @@ playwright-report/
 
 # Scraper output
 scraped_books.csv
+
+# Secrets - never commit
+.env
