@@ -8,9 +8,9 @@ run against public practice websites.
 
 | Test file | Pattern | Target site |
 |---|---|---|
-| `tests/test_todo_e2e.py` | End-to-end UI testing | [demo.playwright.dev/todomvc](https://demo.playwright.dev/todomvc/) |
-| `tests/test_books_scraper.py` | Web scraping (outputs `scraped_books.csv`) | [books.toscrape.com](https://books.toscrape.com) |
-| `tests/test_checkout_flow.py` | Login + user flow automation | [saucedemo.com](https://www.saucedemo.com) |
+| `tests/ui_testing/test_todo_e2e.py` | End-to-end UI testing | [demo.playwright.dev/todomvc](https://demo.playwright.dev/todomvc/) |
+| `tests/scraping/test_books_scraper.py` | Web scraping (outputs `scraped_books.csv`) | [books.toscrape.com](https://books.toscrape.com) |
+| `tests/automation/test_checkout_flow.py` | Login + user flow automation | [saucedemo.com](https://www.saucedemo.com) |
 
 ## Setup
 
@@ -48,7 +48,7 @@ pytest
 
 Run a single file:
 ```bash
-pytest tests/test_todo_e2e.py
+pytest tests/ui_testing/test_todo_e2e.py
 ```
 Add --headed to any command to watch the browser while it runs, instead of
 running headless.
