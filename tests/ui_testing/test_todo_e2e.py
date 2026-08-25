@@ -1,4 +1,4 @@
-from pages.todo_page import TodoPage
+from pages.todomvc.todo_page import TodoPage
 
 
 def test_add_and_complete_todo(page):

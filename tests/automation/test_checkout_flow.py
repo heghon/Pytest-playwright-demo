@@ -1,49 +1,33 @@
 import os
 from dotenv import load_dotenv
-from playwright.sync_api import Page, expect
+from pages.saucedemo.login_page import LoginPage
+from pages.saucedemo.inventory_page import InventoryPage
+from pages.saucedemo.cart_page import CartPage
+from pages.saucedemo.checkout_page import CheckoutPage
 
-load_dotenv()  # reads .env and loads its values into the environment
+load_dotenv() # Load the .env values
 
 USERNAME = os.getenv("SAUCEDEMO_USERNAME")
 PASSWORD = os.getenv("SAUCEDEMO_PASSWORD")
 
-def test_login_add_to_cart_and_checkout(page: Page):
-    # 1. Go to the login page
-    page.goto("https://www.saucedemo.com/")
 
-    # 2. Fill in the login form using SauceDemo's published test credentials
-    page.get_by_placeholder("Username").fill(USERNAME)
-    page.get_by_placeholder("Password").fill(PASSWORD)
-    page.get_by_role("button", name="Login").click()
+def test_login_add_to_cart_and_checkout(page):
+    login_page = LoginPage(page)
+    login_page.goto()
+    login_page.login(USERNAME, PASSWORD)
+    login_page.expect_login_success()
 
-    # 3. Confirm login succeeded by checking we're on the inventory page
-    expect(page).to_have_url("https://www.saucedemo.com/inventory.html")
+    inventory_page = InventoryPage(page)
+    inventory_page.add_to_cart("sauce-labs-backpack")
+    inventory_page.expect_cart_count(1)
+    inventory_page.go_to_cart()
 
-    # 4. Add a specific product to the cart, identified by its data-test id
-    page.locator("[data-test='add-to-cart-sauce-labs-backpack']").click()
+    cart_page = CartPage(page)
+    cart_page.expect_on_cart_page()
+    cart_page.checkout()
 
-    # 5. Assert the cart icon badge shows "1" item
-    cart_badge = page.locator(".shopping_cart_badge")
-    expect(cart_badge).to_have_text("1")
-
-    # 6. Go to the cart
-    page.locator(".shopping_cart_link").click()
-    expect(page).to_have_url("https://www.saucedemo.com/cart.html")
-
-    # 7. Proceed to checkout
-    page.get_by_role("button", name="Checkout").click()
-
-    # 8. Fill in the checkout info form
-    page.get_by_placeholder("First Name").fill("Ada")
-    page.get_by_placeholder("Last Name").fill("Lovelace")
-    page.get_by_placeholder("Zip/Postal Code").fill("75000")
-    page.get_by_role("button", name="Continue").click()
-
-    # 9. Confirm we reached the checkout overview page with our item listed
-    expect(page.locator(".inventory_item_name")).to_have_text("Sauce Labs Backpack")
-
-    # 10. Finish the order
-    page.get_by_role("button", name="Finish").click()
-
-    # 11. Assert the final confirmation message appears
-    expect(page.get_by_text("Thank you for your order!")).to_be_visible()
+    checkout_page = CheckoutPage(page)
+    checkout_page.fill_info("Ada", "Lovelace", "75000")
+    checkout_page.expect_item_in_overview("Sauce Labs Backpack")
+    checkout_page.finish()
+    checkout_page.expect_order_complete()
