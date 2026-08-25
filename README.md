@@ -44,6 +44,7 @@ run against public practice websites.
 Run everything:
 ```bash
 pytest
+```
 
 Run a single file:
 ```bash
