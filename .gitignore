@@ -20,3 +20,6 @@ scraped_books.csv
 
 # Secrets - never commit
 .env
+
+# Test reports
+reports/
