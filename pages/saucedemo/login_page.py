@@ -9,9 +9,9 @@ class LoginPage(BasePage):
         self.page.goto(self.URL)
 
     def login(self, username: str, password: str):
-        self.page.get_by_placeholder("Username").fill(username)
-        self.page.get_by_placeholder("Password").fill(password)
-        self.page.get_by_role("button", name="Login").click()
+        self.safe_fill(self.page.get_by_placeholder("Username"), username)
+        self.safe_fill(self.page.get_by_placeholder("Password"), password)
+        self.wait_for_element(self.page.get_by_role("button", name="Login")).click()
 
     def expect_login_success(self):
         expect(self.page).to_have_url("https://www.saucedemo.com/inventory.html")

@@ -11,13 +11,9 @@ USERNAME = os.getenv("SAUCEDEMO_USERNAME")
 PASSWORD = os.getenv("SAUCEDEMO_PASSWORD")
 
 
-def test_login_add_to_cart_and_checkout(page):
-    login_page = LoginPage(page)
-    login_page.goto()
-    login_page.login(USERNAME, PASSWORD)
-    login_page.expect_login_success()
+def test_login_add_to_cart_and_checkout(page, logged_in_inventory_page):
 
-    inventory_page = InventoryPage(page)
+    inventory_page = logged_in_inventory_page
     inventory_page.add_to_cart("sauce-labs-backpack")
     inventory_page.expect_cart_count(1)
     inventory_page.go_to_cart()
