@@ -1,6 +1,8 @@
+import pytest
 from pages.todomvc.todo_page import TodoPage
 
 
+@pytest.mark.ui
 def test_add_and_complete_todo(page):
     todo_page = TodoPage(page)
     

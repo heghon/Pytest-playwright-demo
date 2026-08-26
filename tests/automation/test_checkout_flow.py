@@ -1,3 +1,4 @@
+import pytest
 import os
 from dotenv import load_dotenv
 from pages.saucedemo.login_page import LoginPage
@@ -11,6 +12,7 @@ USERNAME = os.getenv("SAUCEDEMO_USERNAME")
 PASSWORD = os.getenv("SAUCEDEMO_PASSWORD")
 
 
+@pytest.mark.automation
 def test_login_add_to_cart_and_checkout(page, logged_in_inventory_page):
 
     inventory_page = logged_in_inventory_page

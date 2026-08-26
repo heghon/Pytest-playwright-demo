@@ -1,8 +1,10 @@
+import pytest
 import csv
 from pathlib import Path
 from pages.books_toscrape.books_page import BooksPage
 
 
+@pytest.mark.scraping
 def test_scrape_books_to_csv(page):
     books_page = BooksPage(page)
     books_page.goto()
