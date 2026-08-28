@@ -1,0 +1,216 @@
+/******************************
+ * Custom report styling
+ *
+ * Appended after pytest-html's own style.css (see --css in pytest.ini), so
+ * plain overrides win on equal specificity — no !important needed anywhere.
+ *
+ * 1. Failure artifacts (inline video + trace command), light mode
+ * 2. Dark theme, following the OS via prefers-color-scheme
+ ******************************/
+
+/*------------------
+ * 1. Failure artifacts
+ *
+ * Markup comes from tests/conftest.py via extras.html(). Layout lives here at
+ * the top level so it holds in both themes; only colours are restated below.
+ *------------------*/
+.artifact {
+  max-width: 660px;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid #e6e6e6;
+  border-radius: 4px;
+}
+
+.artifact__label {
+  margin-bottom: 6px;
+  font-weight: bold;
+  color: #333;
+}
+
+.artifact__note {
+  margin-bottom: 6px;
+}
+
+.artifact--video video,
+.artifact__img {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  border-radius: 3px;
+  background-color: black;
+}
+
+.artifact__img {
+  cursor: pointer;
+}
+
+.artifact__cmd {
+  display: inline-block;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 12px;
+  word-break: break-all;
+  vertical-align: middle;
+  background-color: #f2f2f2;
+  color: #222;
+  /* one click selects the whole command, for when the copy button can't */
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+.artifact__copy {
+  margin-left: 8px;
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  vertical-align: middle;
+  background-color: #fafafa;
+  color: #222;
+}
+
+.artifact__copy:hover {
+  background-color: #eeeeee;
+}
+
+/*------------------
+ * 2. Dark theme
+ *
+ * Every rule below restates a selector from pytest-html's style.css that
+ * hardcodes a light value (black text, #e6e6e6 borders, #f6f6f6 stripes).
+ *------------------*/
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #1e1f22;
+    color: #a8adb5;
+  }
+
+  h1,
+  h2,
+  p {
+    color: #e8eaed;
+  }
+
+  a {
+    color: #6cb6ff;
+  }
+
+  /* Test outcome colours — the CSS keywords are too dark on a dark ground */
+  span.passed,
+  .passed .col-result {
+    color: #57c46b;
+  }
+
+  span.skipped,
+  span.xfailed,
+  span.rerun,
+  .skipped .col-result,
+  .xfailed .col-result,
+  .rerun .col-result {
+    color: #e0a33e;
+  }
+
+  span.error,
+  span.failed,
+  span.xpassed,
+  .error .col-result,
+  .failed .col-result,
+  .xpassed .col-result {
+    color: #ff6b6b;
+  }
+
+  /* Environment table */
+  #environment td {
+    border-color: #3a3d42;
+  }
+
+  #environment tr:nth-child(odd) {
+    background-color: #26282c;
+  }
+
+  /* Results table */
+  #results-table {
+    border-color: #3a3d42;
+    color: #a8adb5;
+  }
+
+  #results-table th,
+  #results-table td {
+    border-color: #3a3d42;
+  }
+
+  .collapsible td:not(.col-links):hover::after {
+    color: #7d838c;
+  }
+
+  /* Log block — the most hardcoded colours in the default stylesheet */
+  .logwrapper {
+    background-color: #26282c;
+  }
+
+  .logwrapper .logexpander {
+    background-color: #26282c;
+  }
+
+  .logwrapper .logexpander:hover {
+    color: #ffffff;
+    border-color: #ffffff;
+  }
+
+  .logwrapper .log {
+    border-color: #3a3d42;
+    color: #cfd3d9;
+  }
+
+  /* Media viewer (failure screenshot) */
+  div.media {
+    border-color: #3a3d42;
+  }
+
+  /* Summary controls */
+  #show_all_details,
+  #hide_all_details {
+    padding: 3px 8px;
+    border: 1px solid #4a4e55;
+    border-radius: 3px;
+    cursor: pointer;
+    background-color: #2d3036;
+    color: #d5d9df;
+  }
+
+  #show_all_details:hover,
+  #hide_all_details:hover {
+    background-color: #383c43;
+  }
+
+  input.filter {
+    accent-color: #6cb6ff;
+  }
+
+  /* Failure artifacts */
+  .artifact {
+    border-color: #3a3d42;
+  }
+
+  .artifact__label {
+    color: #e8eaed;
+  }
+
+  .artifact__cmd {
+    background-color: #15161a;
+    color: #d7dbe0;
+  }
+
+  .artifact__copy {
+    border-color: #4a4e55;
+    background-color: #2d3036;
+    color: #d5d9df;
+  }
+
+  .artifact__copy:hover {
+    background-color: #383c43;
+  }
+}
