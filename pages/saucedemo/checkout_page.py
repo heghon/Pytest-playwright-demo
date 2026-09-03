@@ -9,8 +9,8 @@ class CheckoutPage(BasePage):
         self.page.get_by_placeholder("Zip/Postal Code").fill(zip_code)
         self.page.get_by_role("button", name="Continue").click()
 
-    def expect_item_in_overview(self, name: str):
-        expect(self.page.locator(".inventory_item_name")).to_have_text(name)
+    def expect_items_in_overview(self, names: list[str]):
+        expect(self.page.locator(".inventory_item_name")).to_have_text(names)
 
     def finish(self):
         self.page.get_by_role("button", name="Finish").click()

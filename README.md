@@ -9,8 +9,8 @@ run against public practice websites.
 | Feature file | Step definitions | Pattern | Target site |
 |---|---|---|---|
 | `features/ui_testing/todo.feature` | `stepdefs/ui_testing/test_todo_e2e.py` | End-to-end UI testing | [demo.playwright.dev/todomvc](https://demo.playwright.dev/todomvc/) |
-| *(coming next)* | `stepdefs/scraping/test_books_scraper.py` | Web scraping (outputs `scraped_books.csv`) | [books.toscrape.com](https://books.toscrape.com) |
-| *(coming next)* | `stepdefs/automation/test_checkout_flow.py` | Login + user flow automation | [saucedemo.com](https://www.saucedemo.com) |
+| `features/scraping/books_scraping.feature` | `stepdefs/scraping/test_books_scraper.py` | Web scraping (outputs `scraped_books.csv`) | [books.toscrape.com](https://books.toscrape.com) |
+| `features/automation/checkout.feature` | `stepdefs/automation/test_checkout_flow.py` | Login + user flow automation | [saucedemo.com](https://www.saucedemo.com) |
 
 Scenarios are written in [Gherkin](https://cucumber.io/docs/gherkin/) (`features/`) and wired to Playwright via [pytest-bdd](https://pytest-bdd.readthedocs.io/) step definitions (`stepdefs/`) — the folder structure mirrors category by category.
 
@@ -43,8 +43,6 @@ Scenarios are written in [Gherkin](https://cucumber.io/docs/gherkin/) (`features
 
 ## Running the tests
 
-## Running the tests
-
 Run everything:
 ```bash
 pytest
@@ -63,3 +61,14 @@ pytest stepdefs/ui_testing/test_todo_e2e.py
 ```
 
 Add `--headed` to any command above to watch the browser instead of running headless.
+
+## Updating dependencies
+
+```bash
+pip install --upgrade $(pip freeze | awk -F'==' '{print $1}')
+pip freeze > requirements.txt
+playwright install
+```
+
+This upgrades every installed package to its latest compatible version, then re-pins `requirements.txt` to match.
+Be aware, newer version of any dependency could introduce a breaking change.
