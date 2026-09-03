@@ -6,11 +6,13 @@ run against public practice websites.
 
 ## What's included
 
-| Test file | Pattern | Target site |
-|---|---|---|
-| `tests/ui_testing/test_todo_e2e.py` | End-to-end UI testing | [demo.playwright.dev/todomvc](https://demo.playwright.dev/todomvc/) |
-| `tests/scraping/test_books_scraper.py` | Web scraping (outputs `scraped_books.csv`) | [books.toscrape.com](https://books.toscrape.com) |
-| `tests/automation/test_checkout_flow.py` | Login + user flow automation | [saucedemo.com](https://www.saucedemo.com) |
+| Feature file | Step definitions | Pattern | Target site |
+|---|---|---|---|
+| `features/ui_testing/todo.feature` | `stepdefs/ui_testing/test_todo_e2e.py` | End-to-end UI testing | [demo.playwright.dev/todomvc](https://demo.playwright.dev/todomvc/) |
+| *(coming next)* | `stepdefs/scraping/test_books_scraper.py` | Web scraping (outputs `scraped_books.csv`) | [books.toscrape.com](https://books.toscrape.com) |
+| *(coming next)* | `stepdefs/automation/test_checkout_flow.py` | Login + user flow automation | [saucedemo.com](https://www.saucedemo.com) |
+
+Scenarios are written in [Gherkin](https://cucumber.io/docs/gherkin/) (`features/`) and wired to Playwright via [pytest-bdd](https://pytest-bdd.readthedocs.io/) step definitions (`stepdefs/`) — the folder structure mirrors category by category.
 
 ## Setup
 
@@ -41,14 +43,23 @@ run against public practice websites.
 
 ## Running the tests
 
+## Running the tests
+
 Run everything:
 ```bash
 pytest
 ```
 
-Run a single file:
+Run one category, by Gherkin tag:
 ```bash
-pytest tests/ui_testing/test_todo_e2e.py
+pytest -m ui           # just the UI scenario(s)
+pytest -m scraping     # just the scraping scenario(s)
+pytest -m automation   # just the automation scenario(s)
 ```
-Add --headed to any command to watch the browser while it runs, instead of
-running headless.
+
+Run one file directly:
+```bash
+pytest stepdefs/ui_testing/test_todo_e2e.py
+```
+
+Add `--headed` to any command above to watch the browser instead of running headless.

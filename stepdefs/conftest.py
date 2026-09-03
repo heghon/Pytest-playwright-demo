@@ -4,8 +4,21 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 from pytest_html import extras
+import re
 
 load_dotenv()
+
+JIRA_TAG_RE = re.compile(r"^JIRA-\d+$")
+
+
+def pytest_bdd_apply_tag(tag, function):
+    # Gherkin tags become pytest marks by default — cute for @ui,
+    # chaotic once we have fifty @JIRA-xxx tags. JIRA keys get rerouted
+    # into one shared "jira_key" mark so pytest.ini doesn't turn into a JIRA export.
+    if JIRA_TAG_RE.match(tag):
+        pytest.mark.jira_key(tag)(function)
+        return True
+    return None
 
 # Videos are inlined into the report as base64 data URIs. Safari sandboxes a
 # file:// page to its own directory and below, so reports/report.html simply
