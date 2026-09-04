@@ -1,3 +1,5 @@
+![Tests](https://github.com/heghon/Pytest-playwright-demo/actions/workflows/tests.yml/badge.svg)
+
 # Pytest-Playwright Demo
 
 A demo project showcasing three classic browser automation patterns using
@@ -18,14 +20,20 @@ Scenarios are written in [Gherkin](https://cucumber.io/docs/gherkin/) (`features
 
 1. Clone the repo and enter the folder:
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/heghon/Pytest-playwright-demo
    cd Pytest-playwright-demo
    ```
 
 2. Create and activate a virtual environment:
+   - For Windows :
    ```bash
    python3 -m venv venv
-   source venv/bin/activate   # on Windows: venv\Scripts\activate
+   source venv\\Scripts\\activate
+   ```
+   - For the rest of the world :
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
    ```
 
 3. Install dependencies:
@@ -72,3 +80,4 @@ playwright install
 
 This upgrades every installed package to its latest compatible version, then re-pins `requirements.txt` to match.
 Be aware, newer version of any dependency could introduce a breaking change.
+Note : A dependabot is included with an automated weekly check & PR for actions & pip (installed packages), so the command is here just in case.
