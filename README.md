@@ -28,7 +28,7 @@ Scenarios are written in [Gherkin](https://cucumber.io/docs/gherkin/) (`features
    - For Windows :
    ```bash
    python3 -m venv venv
-   source venv\\Scripts\\activate
+   source venv\Scripts\activate
    ```
    - For the rest of the world :
    ```bash
