@@ -49,6 +49,13 @@ Scenarios are written in [Gherkin](https://cucumber.io/docs/gherkin/) (`features
    Then fill in real values in `.env` (for this demo, SauceDemo's public test
    credentials `standard_user` / `secret_sauce` work fine).
 
+5. To make CI work on a fork, mirror that same `.env` into GitHub as a **single**
+   secret: Settings → Secrets and variables → Actions → New repository secret,
+   named `DOTENV`, whose value is the whole file rather than one secret per line.
+   The workflow writes it back out to `.env` before running the suite, so adding a
+   variable later means editing the secret and never the workflow. While you're in
+   Settings, set Pages → Source to **GitHub Actions** so the report can publish.
+
 ## Running the tests
 
 Run everything:
