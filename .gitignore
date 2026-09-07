@@ -8,10 +8,6 @@ __pycache__/
 # Pytest cache
 .pytest_cache/
 
-# Playwright artifacts
-test-results/
-playwright-report/
-
 # OS junk
 .DS_Store
 
@@ -21,5 +17,9 @@ scraped_books.csv
 # Secrets - never commit
 .env
 
-# Test reports
+# Test reports, and the failure artifacts that --output now nests inside them.
+# Kept last: the two entries under it are only for runs that bypass pytest.ini
+# and fall back to Playwright's default locations.
 reports/
+test-results/
+playwright-report/
