@@ -5,10 +5,26 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Least privilege plus what Pages needs: pages to publish, id-token so
+# deploy-pages can mint its OIDC token.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. Not cancel-in-progress: a half-published site is
+# worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    outputs:
+      published: ${{ steps.bundle.outputs.ready }}
 
     steps:
       - name: Checkout repository
@@ -25,25 +41,68 @@ jobs:
       - name: Install Playwright browsers
         run: playwright install --with-deps
 
+      # Read by conftest.py, which turns it into a one-click trace-viewer link
+      # per failure. Derived from GITHUB_REPOSITORY rather than hardcoded, so a
+      # fork publishes to its own Pages site instead of pointing at this one.
+      - name: Work out where the report will be published
+        run: |
+          echo "REPORT_BASE_URL=https://${GITHUB_REPOSITORY%%/*}.github.io/${GITHUB_REPOSITORY#*/}" >> "$GITHUB_ENV"
+
       - name: Run tests
         env:
           SAUCEDEMO_USERNAME: ${{ secrets.SAUCEDEMO_USERNAME }}
           SAUCEDEMO_PASSWORD: ${{ secrets.SAUCEDEMO_PASSWORD }}
         run: pytest
 
-      - name: Upload HTML report
+      # The report and the traces have to travel together: the copyable command
+      # points at test-results/ relative to the report, so splitting them across
+      # two zips leaves the path resolving against nothing. index.html so the
+      # bare Pages URL serves the report.
+      - name: Assemble the report bundle
+        id: bundle
         if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: html-report
-          path: reports/report.html
-          retention-days: 14
+        run: |
+          if [ ! -f reports/report.html ]; then
+            echo "The run produced no report — leaving the published one alone."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p site
+          cp reports/report.html site/index.html
+          if [ -d test-results ]; then
+            cp -r test-results site/
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
-      - name: Upload failure artifacts
-        if: always()
+      # Both uploads wait on a bundle actually existing. Publishing an empty
+      # site would replace the last good report with a 404 — worse than keeping
+      # a stale one around.
+      - name: Upload the report bundle
+        if: ${{ always() && steps.bundle.outputs.ready == 'true' }}
         uses: actions/upload-artifact@v7
         with:
-          name: test-results
-          path: test-results/
-          retention-days: 14
-          if-no-files-found: ignore
+          name: playwright-report
+          path: site/
+          retention-days: 7
+
+      - name: Upload the site for Pages
+        if: ${{ always() && steps.bundle.outputs.ready == 'true' }}
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/
+
+  deploy:
+    needs: test
+    # When the suite carries a deliberately failing scenario, test is red on every
+    # run, but publish anyway. A failed run is exactly the one worth reading.
+    if: ${{ !cancelled() && needs.test.outputs.published == 'true' }}
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

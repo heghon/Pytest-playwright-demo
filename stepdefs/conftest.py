@@ -1,6 +1,8 @@
 import base64
+import os
 from html import escape
 from pathlib import Path
+from urllib.parse import quote, urlencode
 import pytest
 from dotenv import load_dotenv
 from pytest_html import extras
@@ -73,6 +75,19 @@ def pytest_bdd_apply_tag(tag, function):
 # bytes sidesteps file access entirely. Above this size we fall back to showing
 # the path, so a long run can't produce a report too heavy to open.
 MAX_EMBED_BYTES = 10 * 1024 * 1024
+
+# Playwright's hosted viewer. It's a static page: a trace opened here is read in
+# the browser, not uploaded, so it's safe to point at a local file.
+TRACE_VIEWER_URL = "https://trace.playwright.dev/"
+
+
+def _relative_to_root(path: Path, root: Path) -> Path:
+    """Path as written from the project root, or absolute if it lies outside."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(root.resolve())
+    except ValueError:
+        return resolved
 
 # Inline handler for the "Copy" button next to the trace command.
 # It has to be an onclick attribute: pytest-html injects HTML extras with
@@ -176,16 +191,41 @@ def _video_extra(video: Path):
     )
 
 
-def _trace_extra(trace: Path):
+def _trace_extra(trace: Path, root: Path):
     """
     A trace is a zip that only means anything inside Playwright's viewer, so
     linking it just triggers a download. Show the command to open it instead,
     ready to copy.
+
+    The path is relative to the project root. An absolute one is only valid on
+    the machine that produced it — on CI that's a runner which no longer exists
+    by the time anyone reads the report, so the command came back "does not
+    exist". Relative, the same string resolves here and inside the unzipped CI
+    artifact, whose layout mirrors the repo.
+
+    REPORT_BASE_URL is set by the workflow when the run is also being published
+    to GitHub Pages. The trace then has a public URL, so it gets a one-click
+    link into the hosted viewer and nobody has to touch a terminal at all.
     """
-    command = f"playwright show-trace {trace.resolve()}"
+    location = _relative_to_root(trace, root)
+    command = f"playwright show-trace {location}"
+
+    link = ""
+    base_url = os.getenv("REPORT_BASE_URL", "").strip().rstrip("/")
+    if base_url and not location.is_absolute():
+        trace_url = f"{base_url}/{quote(location.as_posix())}"
+        viewer_url = f"{TRACE_VIEWER_URL}?{urlencode({'trace': trace_url})}"
+        link = (
+            f'<a class="artifact__link" target="_blank" rel="noopener" '
+            f'href="{escape(viewer_url, quote=True)}">Open in the trace viewer</a>'
+        )
+
     return extras.html(
         f'<div class="artifact artifact--trace">'
         f'<div class="artifact__label">Trace ({escape(trace.name)})</div>'
+        f"{link}"
+        f'<div class="artifact__note">From the project root — or drop the file '
+        f"onto trace.playwright.dev, which never uploads it anywhere:</div>"
         f'<code class="artifact__cmd">{escape(command)}</code>'
         f'<button type="button" class="artifact__copy" '
         f'onclick="{escape(_COPY_JS, quote=True)}">Copy</button>'
@@ -245,7 +285,7 @@ def pytest_runtest_makereport(item, call):
             for video in sorted(folder.glob("video*.webm")):
                 artifacts.append(_video_extra(video))
             for trace in sorted(folder.glob("trace*.zip")):
-                artifacts.append(_trace_extra(trace))
+                artifacts.append(_trace_extra(trace, item.config.rootpath))
             artifacts = [a for a in artifacts if a is not None]
             if artifacts:
                 report.extras = getattr(report, "extras", []) + artifacts

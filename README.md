@@ -70,6 +70,12 @@ pytest stepdefs/ui_testing/test_todo_e2e.py
 
 Add `--headed` to any command above to watch the browser instead of running headless.
 
+## Test report
+
+Every run writes a self-contained `reports/report.html`, and a failing scenario carries its own evidence inline: a screenshot, the video of the run, and a copyable `playwright show-trace` command.
+
+CI publishes the latest run to **[the live report](https://heghon.github.io/Pytest-playwright-demo/)**, where each failure also gets a one-click link into the [Playwright trace viewer](https://trace.playwright.dev/) — no download, no terminal. The same bundle is attached to every run as the `playwright-report` artifact if you'd rather read it offline.
+
 ## Updating dependencies
 
 ```bash

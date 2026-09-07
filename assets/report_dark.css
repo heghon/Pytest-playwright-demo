@@ -32,6 +32,24 @@
   margin-bottom: 6px;
 }
 
+/* Only rendered when the run is published somewhere the trace can be fetched
+   from — see _trace_extra. Locally the command below is the only way in. */
+.artifact__link {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border: 1px solid #b8d4f0;
+  border-radius: 3px;
+  font-size: 12px;
+  text-decoration: none;
+  background-color: #eaf3fb;
+  color: #14539a;
+}
+
+.artifact__link:hover {
+  background-color: #dceaf7;
+}
+
 .artifact--video video,
 .artifact__img {
   display: block;
@@ -197,6 +215,16 @@
 
   .artifact__label {
     color: #e8eaed;
+  }
+
+  .artifact__link {
+    border-color: #2f4f70;
+    background-color: #1b2836;
+    color: #8ab8e8;
+  }
+
+  .artifact__link:hover {
+    background-color: #223244;
   }
 
   .artifact__cmd {
