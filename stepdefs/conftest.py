@@ -4,11 +4,58 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 from pytest_html import extras
+from pytest_metadata.plugin import metadata_key
 import re
 
 load_dotenv()
 
 JIRA_TAG_RE = re.compile(r"^JIRA-\d+$")
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_configure(config):
+    """
+    Drops the Environment rows that would render blank, and only those.
+
+    pytest-base-url publishes a "Base URL" row unconditionally: with no base URL
+    configured it falls back to the base_url ini value, which defaults to "" and
+    not to None, while its own guard only rules out None. Set one — here, or via
+    --base-url — and the row keeps its value like any other.
+
+    trylast so the plugins filling the metadata have had their turn; pytest-html
+    only snapshots the table at session start, so this still lands in time.
+    """
+    metadata = config.stash.get(metadata_key, None)
+    if metadata is None:
+        return
+    for key, value in list(metadata.items()):
+        if value is None or (isinstance(value, str) and not value.strip()):
+            del metadata[key]
+
+# Where pytest-playwright will drop this test's artifacts, and whether the test
+# body failed. Both are recorded while the test is still alive, because
+# pytest_runtest_makereport can no longer discover either one on its own —
+# see _artifacts_dir below.
+ARTIFACTS_DIR = pytest.StashKey[Path]()
+TEST_FAILED = pytest.StashKey[bool]()
+
+
+@pytest.fixture(autouse=True)
+def _artifacts_dir(request, output_path):
+    """
+    Pins pytest-playwright's per-test output folder onto the item.
+
+    The teardown hook used to read it back from item.funcargs, but funcargs only
+    ever holds fixtures pytest resolved during setup: the ones in the test's
+    signature plus the autouse ones. Our steps pull "page" lazily, mid-test, via
+    pytest-bdd — so neither "page" nor the "output_path" behind it was ever
+    filled in there, and the hook silently found nothing to attach.
+
+    Requesting output_path from an autouse fixture puts it in the closure for
+    every test. It only joins --output with a slug of the node id, so it starts
+    no browser and costs nothing for the non-Playwright tests.
+    """
+    request.node.stash[ARTIFACTS_DIR] = Path(output_path)
 
 
 def pytest_bdd_apply_tag(tag, function):
@@ -69,13 +116,22 @@ _OPEN_IMG_JS = (
 )
 
 
-def _screenshot_extra(encoded: str, name: str = "Screenshot on failure"):
+def _screenshot_extra(screenshot: Path, name: str = "Screenshot on failure"):
     """
     Renders the screenshot ourselves rather than via extras.image(), so a plain
     click can open it in a new tab — see _OPEN_IMG_JS. This also leaves
     pytest-html's media viewer with nothing to show, so it hides itself and all
     three artifacts line up in one consistent stack.
+
+    The image is the one --screenshot=only-on-failure already wrote to disk,
+    read at teardown alongside the video and the trace. Grabbing our own via the
+    page fixture is no longer possible from a hook — see _artifacts_dir.
     """
+    try:
+        encoded = base64.b64encode(screenshot.read_bytes()).decode("utf-8")
+    except Exception:
+        return None
+
     return extras.html(
         f'<div class="artifact artifact--screenshot">'
         f'<div class="artifact__label">{escape(name)}</div>'
@@ -150,6 +206,14 @@ def _drop_links_column(cells):
             return
 
 
+def pytest_html_report_title(report):
+    # Anything beats "report.html", which is just the filename pytest-html falls
+    # back to. The cast returns for the curtain call once the performance is
+    # over — and "call" is the pytest phase that decides the verdict.
+    # One string feeds both the browser tab and the <h1>, so it stays short.
+    report.title = "Curtain Call"
+
+
 def pytest_html_results_table_header(cells):
     _drop_links_column(cells)
 
@@ -163,29 +227,21 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    # "call" phase: the test body just ran. The page is still open here,
-    # so we grab our own fresh screenshot immediately.
+    # "call" phase: the test body just ran. Only note the verdict here — the
+    # artifacts don't exist on disk yet.
     if report.when == "call":
-        item.stash_failed = report.failed
-        if report.failed:
-            page = item.funcargs.get("page")
-            if page is not None:
-                try:
-                    screenshot_bytes = page.screenshot()
-                    encoded = base64.b64encode(screenshot_bytes).decode("utf-8")
-                    report.extras = getattr(report, "extras", []) + [
-                        _screenshot_extra(encoded)
-                    ]
-                except Exception:
-                    pass
+        item.stash[TEST_FAILED] = report.failed
 
     # "teardown" phase: by now pytest-playwright has finished writing
-    # video.webm / trace.zip to disk, so only here can we reliably reach them.
-    if report.when == "teardown" and getattr(item, "stash_failed", False):
-        output_path = item.funcargs.get("output_path")
-        if output_path is not None:
-            folder = Path(output_path)
+    # test-failed-1.png / video.webm / trace.zip, so only here can we reach them.
+    # pytest-html gathers the extras of every phase into the one row it renders,
+    # so hanging all three off the teardown report is fine.
+    if report.when == "teardown" and item.stash.get(TEST_FAILED, False):
+        folder = item.stash.get(ARTIFACTS_DIR, None)
+        if folder is not None and folder.is_dir():
             artifacts = []
+            for screenshot in sorted(folder.glob("test-failed-*.png")):
+                artifacts.append(_screenshot_extra(screenshot))
             for video in sorted(folder.glob("video*.webm")):
                 artifacts.append(_video_extra(video))
             for trace in sorted(folder.glob("trace*.zip")):

@@ -81,3 +81,73 @@ playwright install
 This upgrades every installed package to its latest compatible version, then re-pins `requirements.txt` to match.
 Be aware, newer version of any dependency could introduce a breaking change.
 Note : A dependabot is included with an automated weekly check & PR for actions & pip (installed packages), so the command is here just in case.
+
+## Updating Python
+
+Check current support status and end-of-life dates at
+[devguide.python.org/versions](https://devguide.python.org/versions/).
+This project uses [pyenv](https://github.com/pyenv/pyenv) to manage
+Python versions.
+
+1. Install the new version via pyenv and pin it for this project:
+```bash
+   pyenv install [NEW-VERSION]
+   echo "[NEW-VERSION]" > .python-version
+```
+
+2. **Open a brand-new terminal window before continuing.** pyenv only
+   takes effect in shells started *after* it's been configured — reusing
+   an existing terminal tab will silently keep using the old Python.
+
+3. From the new terminal, confirm the switch actually worked *before*
+   touching the venv:
+```bash
+   cd [path-to-your-repository]
+   python3 --version
+   which python3
+```
+   This should report the new version, with a path under
+   `.pyenv/shims/` — not `/Library/Developer/CommandLineTools/`. 
+   If it doesn't, run `echo $SHELL` and make sure pyenv's init line is in the
+   config file your shell actually loads (`~/.zshrc` for zsh,
+   `~/.bash_profile` for bash).
+
+4. Rebuild the virtual environment from scratch — an existing `venv/` is
+   tied to whichever Python built it and can't be upgraded in place:
+```bash
+   rm -rf venv
+   python3 -m venv venv
+   source venv/bin/activate
+   python --version
+```
+   Confirm this also reports the new version, from *inside* the
+   activated venv.
+
+5. Reinstall from the project's actual direct dependencies —
+   **note:** `pip install -r requirements.txt --upgrade` is a
+   full `pip freeze` snapshot pinning every transitive dependency to
+   versions resolved for the *old* Python, which can produce unsolvable
+   conflicts against a new interpreter, so use the following:
+```bash
+   pip install pytest-playwright python-dotenv pytest-html pytest-bdd
+   playwright install
+   pip freeze > requirements.txt
+```
+
+6. Run the full suite or just one test before committing anything 
+   to see if it works correctly:
+```bash
+   pytest
+```
+
+7. Update CI to match, in `.github/workflows/tests.yml`:
+```yaml
+   - name: Set up Python
+     uses: actions/setup-python@v7
+     with:
+       python-version: "[NEW-VERSION]"
+```
+
+8. Check `.github/dependabot.yml` for any `ignore` rules that only
+   existed to work around the *old* Python version's incompatibility
+   with a package — they may no longer be needed.
