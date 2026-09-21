@@ -157,16 +157,21 @@ Python versions.
    Confirm this also reports the new version, from *inside* the
    activated venv.
 
-5. Reinstall from the project's actual direct dependencies —
-   **note:** `pip install -r requirements.txt --upgrade` is a
-   full `pip freeze` snapshot pinning every transitive dependency to
-   versions resolved for the *old* Python, which can produce unsolvable
-   conflicts against a new interpreter, so use the following:
+5. Re-resolve the dependencies against the new interpreter —
+   **note:** `pip install -r requirements.txt` on its own reuses pins that were
+   resolved for the *old* Python, and one of them may have no release that
+   supports the new one. Recompiling from `requirements.in` works the whole
+   graph out again, so use the following:
 ```bash
-   pip install pytest-playwright python-dotenv pytest-html pytest-bdd
+   pip install pip-tools
+   pip-compile --strip-extras --upgrade requirements.in
+   pip install -r requirements.txt
    playwright install
-   pip freeze > requirements.txt
 ```
+   The direct dependencies live in `requirements.in` and nowhere else, so there
+   is no list here to fall out of step with it. Commit both files: the `.in` is
+   unchanged, but `requirements.txt` now holds the versions the new Python
+   resolved to.
 
 6. Run the full suite or just one test before committing anything 
    to see if it works correctly:
@@ -174,13 +179,9 @@ Python versions.
    pytest
 ```
 
-7. Update CI to match, in `.github/workflows/tests.yml`:
-```yaml
-   - name: Set up Python
-     uses: actions/setup-python@v7
-     with:
-       python-version: "[NEW-VERSION]"
-```
+7. Nothing to do for CI. Both jobs in `.github/workflows/tests.yml` set
+   `python-version-file: .python-version`, so the file you edited in step 1 is
+   the only place the version is written — commit it and the runners follow.
 
 8. Check `.github/dependabot.yml` for any `ignore` rules that only
    existed to work around the *old* Python version's incompatibility

@@ -39,7 +39,10 @@ jobs:
       - name: Dependencies · Install Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          # The interpreter is pinned once, in .python-version, which is also
+          # what pyenv reads locally. Hardcoding it here too meant CI could drift
+          # from the version you actually develop against, silently.
+          python-version-file: .python-version
 
       # --dry-run resolves the whole graph and downloads nothing. A pin that
       # contradicts what a parent package allows — pyee past the range playwright
@@ -96,7 +99,10 @@ jobs:
       - name: Setup · Install Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          # The interpreter is pinned once, in .python-version, which is also
+          # what pyenv reads locally. Hardcoding it here too meant CI could drift
+          # from the version you actually develop against, silently.
+          python-version-file: .python-version
 
       - name: Setup · Install the pinned Python dependencies
         run: pip install -r requirements.txt
