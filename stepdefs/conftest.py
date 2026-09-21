@@ -78,7 +78,7 @@ def browser_context_args(browser_context_args):
 
 
 @pytest.fixture(autouse=True)
-def _artifacts_dir(request, output_path):
+def _artifacts_dir(request, output_path, browser_name):
     """
     Pins pytest-playwright's per-test output folder onto the item.
 
@@ -91,6 +91,12 @@ def _artifacts_dir(request, output_path):
     Requesting output_path from an autouse fixture puts it in the closure for
     every test. It only joins --output with a slug of the node id, so it starts
     no browser and costs nothing for the non-Playwright tests.
+
+    browser_name is here for the same reason, and it is load-bearing:
+    pytest-playwright only parameterises a test across engines when it finds
+    browser_name in the fixture closure, and a pytest-bdd scenario never
+    mentions it. Without this, `--browser firefox` was accepted and ignored —
+    every run quietly went to chromium.
     """
     request.node.stash[ARTIFACTS_DIR] = Path(output_path)
 
@@ -533,8 +539,48 @@ def pytest_html_report_title(report):
     report.title = "Curtain Call"
 
 
+def _engine_of(item):
+    """
+    Which engine ran this test.
+
+    The channel wins when there is one: --browser-channel chrome still reports a
+    browser_name of "chromium", and "chrome" is the more useful answer. Falls
+    back to --browser for a run with a single engine, where pytest-playwright
+    never parameterises and so there is no callspec to read.
+    """
+    channel = item.config.getoption("--browser-channel", None)
+    if channel:
+        return channel
+    callspec = getattr(item, "callspec", None)
+    if callspec:
+        name = callspec.params.get("browser_name")
+        if name:
+            return name
+    chosen = item.config.getoption("--browser", None) or []
+    return chosen[0] if chosen else "chromium"
+
+
+def _insert_engine_cell(cells, cell):
+    """
+    Puts the engine straight after Test, in the header and in every row alike.
+
+    pytest-html pairs the two by index — _hydrate_data looks up
+    table_header[index] to decide whether a cell is sortable — so the header and
+    the rows have to agree on where the column sits, which is why both hooks
+    below go through here.
+    """
+    for index, existing in enumerate(cells):
+        if "col-testId" in str(existing) or 'data-column-type="testId"' in str(existing):
+            cells.insert(index + 1, cell)
+            return
+    cells.append(cell)
+
+
 def pytest_html_results_table_header(cells):
     _drop_links_column(cells)
+    _insert_engine_cell(
+        cells, '<th class="sortable" data-column-type="engine">Engine</th>'
+    )
 
 
 def _use_scenario_name(report, cells):
@@ -562,6 +608,8 @@ def _use_scenario_name(report, cells):
 def pytest_html_results_table_row(report, cells):
     _drop_links_column(cells)
     _use_scenario_name(report, cells)
+    engine = getattr(report, "engine", "")
+    _insert_engine_cell(cells, f'<td class="col-engine">{escape(engine)}</td>')
 
 
 def pytest_html_results_table_html(report, data):
@@ -590,6 +638,7 @@ def pytest_runtest_makereport(item, call):
     data = _scenario_data(item)
     if data is not None:
         report.scenario_name = data["name"]
+    report.engine = _engine_of(item)
 
     # "call" phase: the test body just ran. Only note the verdict here — the
     # artifacts don't exist on disk yet.

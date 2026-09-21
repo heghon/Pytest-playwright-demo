@@ -7,6 +7,22 @@ on:
   # how a Dependabot bump that could not even be installed reached main.
   pull_request:
   workflow_dispatch:
+    inputs:
+      browser:
+        description: "Engine to run the suite on"
+        type: choice
+        default: chromium
+        options:
+          # A choice option is its own value, so these read as browser names and
+          # the step below maps them back to flags. chromium/firefox/webkit are
+          # Playwright's own builds — webkit is the engine behind Safari, which
+          # Playwright cannot drive directly. chrome and msedge are the branded
+          # browsers, reached through --browser-channel.
+          - chromium
+          - chrome
+          - firefox
+          - webkit (safari)
+          - msedge
 
 # Least privilege plus what Pages needs: pages to publish, id-token so
 # deploy-pages can mint its OIDC token.
@@ -107,8 +123,28 @@ jobs:
       - name: Setup · Install the pinned Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Setup · Install the Playwright browsers and their system libraries
-        run: playwright install --with-deps
+      # Splits the dropdown choice into what pytest-playwright wants: an engine
+      # for --browser, plus a channel for --browser-channel when the choice was
+      # a branded browser. Empty on push and pull_request, where there is no
+      # input at all, so those keep running chromium.
+      - name: Setup · Work out which engine to run
+        env:
+          BROWSER: ${{ inputs.browser || 'chromium' }}
+        run: |
+          case "$BROWSER" in
+            "webkit (safari)") ENGINE=webkit;   CHANNEL= ;;
+            chrome|msedge)     ENGINE=chromium; CHANNEL=$BROWSER ;;
+            *)                 ENGINE=$BROWSER; CHANNEL= ;;
+          esac
+          echo "ENGINE=$ENGINE" >> "$GITHUB_ENV"
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+          # playwright install takes the branded browser if there is one
+          echo "INSTALL=${CHANNEL:-$ENGINE}" >> "$GITHUB_ENV"
+
+      # Only the engine being tested, rather than all three: a run uses exactly
+      # one, and the download is the slowest step in the job.
+      - name: Setup · Install the Playwright browser and its system libraries
+        run: playwright install --with-deps "$INSTALL"
 
       # Read by conftest.py, which turns it into a one-click trace-viewer link
       # per failure. Derived from GITHUB_REPOSITORY rather than hardcoded, so a
@@ -134,7 +170,12 @@ jobs:
           printf '%s\n' "$DOTENV" > .env
 
       - name: Tests · Run the Playwright test suite
-        run: pytest
+        run: |
+          if [ -n "$CHANNEL" ]; then
+            pytest --browser "$ENGINE" --browser-channel "$CHANNEL"
+          else
+            pytest --browser "$ENGINE"
+          fi
 
       # No assembling left to do: --output puts the failure artifacts under
       # reports/ and --html names the report index.html, so the folder pytest

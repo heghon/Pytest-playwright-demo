@@ -41,6 +41,13 @@ Scenarios are written in [Gherkin](https://cucumber.io/docs/gherkin/) (`features
    pip install -r requirements.txt
    playwright install
    ```
+   That covers Chromium, Firefox and WebKit. Google Chrome and Microsoft Edge
+   are the real branded browsers rather than Playwright's own builds, so they
+   are installed separately and only if you want to run against them:
+   ```bash
+   playwright install chrome
+   playwright install msedge
+   ```
 
 4. Set up environment variables:
    ```bash
@@ -76,6 +83,29 @@ pytest stepdefs/ui_testing/test_todo_e2e.py
 ```
 
 Add `--headed` to any command above to watch the browser instead of running headless.
+
+### Choosing a browser
+
+Runs use Chromium unless you say otherwise:
+
+```bash
+pytest --browser firefox
+pytest --browser webkit                              # the engine behind Safari
+pytest --browser chromium --browser-channel chrome   # real Google Chrome
+pytest --browser chromium --browser-channel msedge   # real Microsoft Edge
+```
+
+`--browser` can be repeated to run every scenario on several engines in one go,
+which puts them all in the same report, one row each:
+
+```bash
+pytest --browser chromium --browser firefox --browser webkit
+```
+
+The engine each scenario ran on shows up in the report's **Engine** column.
+
+On CI, pick an engine from the dropdown when starting the workflow by hand
+(Actions → Playwright Tests → Run workflow). Pushes use Chromium by default.
 
 ## Test report
 
