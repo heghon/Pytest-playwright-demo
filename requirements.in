@@ -1,0 +1,19 @@
+# Direct dependencies only — what this project actually imports or drives.
+#
+# requirements.txt is generated from this file and pins everything, including
+# the packages these pull in. Never edit that file by hand and never rebuild it
+# with `pip freeze`: a freeze lists direct and transitive packages alike with no
+# record of which is which, so Dependabot treats a package like pyee as if the
+# project had chosen it and bumps it straight past the range playwright allows.
+#
+# To regenerate after changing this file:
+#     pip install pip-tools
+#     pip-compile requirements.in
+
+playwright
+pytest
+pytest-bdd
+pytest-html
+pytest-metadata
+pytest-playwright
+python-dotenv

@@ -3,6 +3,9 @@ name: Playwright Tests
 on:
   push:
     branches: [main]
+  # Without this, nothing ran until a branch had already been merged — which is
+  # how a Dependabot bump that could not even be installed reached main.
+  pull_request:
   workflow_dispatch:
 
 # Least privilege plus what Pages needs: pages to publish, id-token so
@@ -12,13 +15,57 @@ permissions:
   pages: write
   id-token: write
 
-# One deployment at a time. Not cancel-in-progress: a half-published site is
-# worse than a slightly stale one.
+# One run at a time per branch. Keyed on the ref so a pull request never queues
+# behind main, and not cancel-in-progress: a half-published site is worse than a
+# slightly stale one.
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  # Runs first and on its own, because it is the check that would have caught
+  # the broken bump: it needs no secrets and no browsers, so it reports in well
+  # under a minute and works even on a Dependabot pull request, which by default
+  # gets none of this repository's secrets.
+  dependencies:
+    name: Check the pinned dependencies resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Dependencies · Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Dependencies · Install Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      # --dry-run resolves the whole graph and downloads nothing. A pin that
+      # contradicts what a parent package allows — pyee past the range playwright
+      # accepts, say — fails here instead of halfway through a real install.
+      - name: Dependencies · Resolve requirements.txt without installing
+        run: pip install --dry-run -r requirements.txt
+
+      # requirements.txt is generated from requirements.in. If someone edits the
+      # .in and forgets to recompile, the lock silently stops matching its source.
+      #
+      # The recompile has to start from a copy of the current lock: pip-compile
+      # treats an existing output file as preferences and keeps any pin that is
+      # still valid. Compiling from nothing would instead pick the newest release
+      # of everything, and the check would fail every time upstream published
+      # anything — which is a different question from "is the lock in sync".
+      - name: Dependencies · Confirm requirements.txt matches requirements.in
+        run: |
+          pip install pip-tools
+          cp requirements.txt /tmp/recompiled.txt
+          pip-compile --quiet --strip-extras --output-file=/tmp/recompiled.txt requirements.in
+          if ! diff -q <(grep -v '^#' requirements.txt) <(grep -v '^#' /tmp/recompiled.txt) > /dev/null; then
+            echo "::error::requirements.txt is out of date — run 'pip-compile --strip-extras requirements.in' and commit the result."
+            diff <(grep -v '^#' requirements.txt) <(grep -v '^#' /tmp/recompiled.txt) || true
+            exit 1
+          fi
+
   # Setup, test and report stay in one job on purpose: every job gets its own
   # fresh runner, so splitting them would mean re-checking-out and
   # re-installing the browsers each time, then shuttling the report between
@@ -26,6 +73,16 @@ jobs:
   # the Actions UI already times and folds each one separately.
   test:
     name: Run the tests suite and build the report
+    # Skipped on Dependabot's own pull requests, and only those: Dependabot is
+    # handed a separate secret store, so DOTENV arrives empty and the suite would
+    # fail on a missing login rather than on anything the bump did. The
+    # dependencies job above is the check that means something there, and the
+    # full suite still runs the moment the PR is merged — that is a push to main.
+    #
+    # Written as "not a Dependabot pull request" rather than "not Dependabot" on
+    # purpose: a push is never skipped, so turning on Dependabot auto-merge later
+    # cannot quietly cost you the post-merge run.
+    if: ${{ github.event_name != 'pull_request' || github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -113,7 +170,11 @@ jobs:
     needs: test
     # When the suite carries a deliberately failing scenario, test is red on every
     # run, but publish anyway. A failed run is exactly the one worth reading.
-    if: ${{ !cancelled() && needs.test.outputs.published == 'true' }}
+    #
+    # Pushes only: a pull request must not overwrite the published report with a
+    # run from an unmerged branch, and a Dependabot one has no permission to
+    # deploy in any case.
+    if: ${{ !cancelled() && needs.test.outputs.published == 'true' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
 
     environment:

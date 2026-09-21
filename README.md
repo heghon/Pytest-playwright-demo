@@ -85,15 +85,36 @@ CI publishes the latest run to **[the live report](https://heghon.github.io/Pyte
 
 ## Updating dependencies
 
+Two files, and only one of them is written by hand:
+
+| File | What it is |
+|---|---|
+| `requirements.in` | the packages this project actually imports — edit this one |
+| `requirements.txt` | every pin, generated from the `.in` and annotated with `# via <parent>` |
+
+To add or remove a package, edit `requirements.in`, then regenerate the lock:
+
 ```bash
-pip install --upgrade $(pip freeze | awk -F'==' '{print $1}')
-pip freeze > requirements.txt
+pip install pip-tools
+pip-compile --strip-extras requirements.in
 playwright install
 ```
 
-This upgrades every installed package to its latest compatible version, then re-pins `requirements.txt` to match.
-Be aware, newer version of any dependency could introduce a breaking change.
-Note : A dependabot is included with an automated weekly check & PR for actions & pip (installed packages), so the command is here just in case.
+To pull in newer versions of everything, add `--upgrade`:
+
+```bash
+pip-compile --strip-extras --upgrade requirements.in
+```
+
+**Never rebuild `requirements.txt` with `pip freeze`.** A freeze lists direct and
+transitive packages alike with no record of which is which, so Dependabot reads
+every line as a deliberate choice and will happily bump a package like `pyee`
+past the range `playwright` allows — producing a lock that cannot be installed
+at all. The `# via` annotations are what keep that from happening.
+
+Dependabot opens a weekly PR for pip and for the Actions. CI runs on pull
+requests, and the `dependencies` job resolves the lock before anything else, so a bump
+that does not install fails on the PR instead of landing on `main`.
 
 ## Updating Python
 
