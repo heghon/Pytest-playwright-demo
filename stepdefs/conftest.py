@@ -317,6 +317,14 @@ _OPEN_IMG_JS = (
 )
 
 
+# Folds a step's notes away and back. Inline like the handlers above, for the
+# same reason: pytest-html injects extras with insertAdjacentHTML, which honours
+# an inline handler but never runs a <script>. The class goes on the <li>, so the
+# caret and the notes can both react to it in CSS alone. Single quotes only —
+# this string ends up inside an HTML attribute.
+_TOGGLE_NOTES_JS = "(function(h){h.parentElement.classList.toggle('is-collapsed');})(this)"
+
+
 def _step_table(table):
     """
     The Gherkin table under a step, verbatim.
@@ -351,10 +359,32 @@ def _steps_extra(data: dict):
         notes = "".join(
             f'<div class="step__note">{escape(n)}</div>' for n in step["notes"]
         )
+
+        # Only a step that actually has notes becomes clickable, so clicking one
+        # without any does nothing rather than looking broken. Notes start
+        # visible; the toggle is there for the step that collected a pile of them.
+        count = len(step["notes"])
+        if count:
+            head = (
+                f'<div class="step__head step__head--clickable" '
+                f'title="Show or hide these notes" '
+                f'onclick="{escape(_TOGGLE_NOTES_JS, quote=True)}">'
+            )
+            toggle = (
+                f'<span class="step__toggle">{count} '
+                f'note{"s" if count > 1 else ""}</span>'
+            )
+        else:
+            head = '<div class="step__head">'
+            toggle = ""
+
         rows.append(
             f'<li class="step step--{status}">'
+            f"{head}"
             f'<span class="step__keyword">{escape(step["keyword"])}</span> '
             f'<span class="step__name">{escape(step["name"])}</span>'
+            f"{toggle}"
+            f"</div>"
             f"{_step_table(step['table'])}"
             f"{notes}"
             f"</li>"

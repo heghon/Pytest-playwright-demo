@@ -94,6 +94,32 @@
   border-bottom: none;
 }
 
+/* Only a step carrying notes gets the pointer — the rest are inert on click. */
+.step__head--clickable {
+  cursor: pointer;
+}
+
+/* The caret follows the state, so the toggle needs no JS beyond flipping the
+   class: notes are open by default, folded away once .is-collapsed is set. */
+.step__toggle {
+  margin-left: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: #8a6d1f;
+}
+
+.step__toggle::before {
+  content: "▾ ";
+}
+
+.step.is-collapsed .step__toggle::before {
+  content: "▸ ";
+}
+
+.step.is-collapsed .step__note {
+  display: none;
+}
+
 /* A report_note() — an observation that did not fail the scenario. */
 .step__note {
   margin: 3px 0 0 12px;
@@ -318,6 +344,10 @@
 
   .step__table td {
     border-bottom-color: #2f3237;
+  }
+
+  .step__toggle {
+    color: #b8975a;
   }
 
   .step__note {
