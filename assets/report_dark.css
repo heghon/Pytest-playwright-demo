@@ -68,6 +68,23 @@
   color: #8a8a8a;
 }
 
+/* The Gherkin table under a step, shown as written in the feature file. */
+.step__table {
+  margin: 4px 0 0 12px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.step__table td {
+  padding: 2px 10px 2px 0;
+  border-bottom: 1px solid #ececec;
+  white-space: pre;
+}
+
+.step__table tr:last-child td {
+  border-bottom: none;
+}
+
 /* A report_note() — an observation that did not fail the scenario. */
 .step__note {
   margin: 3px 0 0 12px;
@@ -288,6 +305,10 @@
   .step--skipped {
     border-left-color: #35383d;
     color: #7f858d;
+  }
+
+  .step__table td {
+    border-bottom-color: #2f3237;
   }
 
   .step__note {

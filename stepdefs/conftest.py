@@ -128,6 +128,14 @@ def pytest_bdd_before_scenario(request, feature, scenario):
                 "line": step.line_number,
                 "status": "skipped",
                 "notes": [],
+                # The Gherkin table under a step, if it has one. The step name
+                # alone reads "I fill in my checkout information:" and tells you
+                # nothing about what was actually filled in.
+                "table": (
+                    [[cell.value for cell in row.cells] for row in step.datatable.rows]
+                    if step.datatable
+                    else None
+                ),
             }
             for step in scenario.steps
         ],
@@ -299,6 +307,24 @@ _OPEN_IMG_JS = (
 )
 
 
+def _step_table(table):
+    """
+    The Gherkin table under a step, verbatim.
+
+    Every row is rendered the same. Whether the first one is a header is the
+    step definition's business — check_overview_items reads it as data, while
+    fill_checkout_info treats it as column names — so the report shows what the
+    feature file says and leaves the interpretation alone.
+    """
+    if not table:
+        return ""
+    body = "".join(
+        "<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in row) + "</tr>"
+        for row in table
+    )
+    return f'<table class="step__table">{body}</table>'
+
+
 def _steps_extra(data: dict):
     """
     The scenario as Gherkin, attached whether it passed or failed.
@@ -319,6 +345,7 @@ def _steps_extra(data: dict):
             f'<li class="step step--{status}">'
             f'<span class="step__keyword">{escape(step["keyword"])}</span> '
             f'<span class="step__name">{escape(step["name"])}</span>'
+            f"{_step_table(step['table'])}"
             f"{notes}"
             f"</li>"
         )
@@ -495,6 +522,22 @@ def _use_scenario_name(report, cells):
 def pytest_html_results_table_row(report, cells):
     _drop_links_column(cells)
     _use_scenario_name(report, cells)
+
+
+def pytest_html_results_table_html(report, data):
+    """
+    Drops the "No log output captured." placeholder.
+
+    pytest-html falls back to that line whenever a test produced no output,
+    which for a passing scenario is every time — an empty box saying there is
+    nothing to show. Emptying the list removes the log element outright rather
+    than leaving a blank one: app.js only builds it `if (log)`.
+
+    Matched on the exact placeholder, so a test that really did log something
+    keeps it, pass or fail.
+    """
+    if data == ["No log output captured."]:
+        del data[:]
 
 
 @pytest.hookimpl(hookwrapper=True)
