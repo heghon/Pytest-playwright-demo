@@ -14,6 +14,15 @@
  * Markup comes from tests/conftest.py via extras.html(). Layout lives here at
  * the top level so it holds in both themes; only colours are restated below.
  *------------------*/
+/* Emptying the log in conftest.py removes the <div class="log">, but not the
+   .logwrapper around it — which carries the expand control, so a passing test
+   was left with a box and a toggle for nothing. Hide the wrapper when it has no
+   log left inside. On a browser without :has() the empty box simply comes back,
+   which is where we started rather than anything worse. */
+.logwrapper:not(:has(.log)) {
+  display: none;
+}
+
 .artifact {
   max-width: 660px;
   margin: 0 0 12px;

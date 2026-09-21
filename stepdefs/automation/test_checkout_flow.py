@@ -2,12 +2,15 @@ import pytest
 from pytest_bdd import scenarios, given, when, then, parsers
 from pages.saucedemo.cart_page import CartPage
 from pages.saucedemo.checkout_page import CheckoutPage
+from stepdefs.conftest import report_note
 
 scenarios("automation/checkout.feature")
 
 
 @given("I am logged in to SauceDemo", target_fixture="inventory_page")
 def logged_in(logged_in_inventory_page):
+    report_note("Login try")
+    report_note("Just another line to test")
     return logged_in_inventory_page
 
 

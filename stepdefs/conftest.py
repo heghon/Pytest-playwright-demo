@@ -111,9 +111,42 @@ def pytest_bdd_apply_tag(tag, function):
 # never reached is visible as exactly that.
 SCENARIO = pytest.StashKey[dict]()
 
+# The step running right now, for report_note() to hang an observation on.
+#
+# A module global rather than a fixture, so a note can be imported and called
+# where it is needed instead of being threaded through the signature of every
+# step that might want one. Safe because pytest runs a single scenario at a time
+# per process — an xdist worker is its own process, with its own copy of this.
+_current_step = None
+
 
 def _scenario_data(node):
     return node.stash.get(SCENARIO, None)
+
+
+def report_note(message):
+    """
+    Records an observation against the step currently running, for something
+    worth reporting that isn't worth failing the run over — a slow response, a
+    cosmetic glitch, a value that looked off. The scenario still passes; the
+    note simply shows up under its step in the report.
+
+        from stepdefs.conftest import report_note
+
+        @given("I am logged in to SauceDemo", target_fixture="inventory_page")
+        def logged_in(logged_in_inventory_page):
+            report_note("needed a second attempt")
+            return logged_in_inventory_page
+
+    A note only means something attached to a step, so calling it outside one
+    raises rather than quietly dropping what you wanted recorded.
+    """
+    if _current_step is None:
+        raise RuntimeError(
+            "report_note() has to be called from inside a Gherkin step — "
+            "there is no step running to attach this to."
+        )
+    _current_step["notes"].append(str(message))
 
 
 def pytest_bdd_before_scenario(request, feature, scenario):
@@ -143,6 +176,8 @@ def pytest_bdd_before_scenario(request, feature, scenario):
 
 
 def pytest_bdd_before_step(request, feature, scenario, step, step_func):
+    global _current_step
+    _current_step = None
     data = _scenario_data(request.node)
     if data is None:
         return
@@ -152,55 +187,30 @@ def pytest_bdd_before_step(request, feature, scenario, step, step_func):
         if recorded["line"] == step.line_number and recorded["status"] == "skipped":
             recorded["status"] = "running"
             data["current"] = recorded
+            _current_step = recorded
             return
 
 
 def pytest_bdd_after_step(request, feature, scenario, step, step_func, step_func_args):
+    global _current_step
     data = _scenario_data(request.node)
     if data and data["current"] is not None:
         data["current"]["status"] = "passed"
         data["current"] = None
+    _current_step = None
 
 
 def pytest_bdd_step_error(
     request, feature, scenario, step, step_func, step_func_args, exception
 ):
+    global _current_step
     data = _scenario_data(request.node)
     if data and data["current"] is not None:
         data["current"]["status"] = "failed"
         data["current"] = None
+    _current_step = None
 
 
-@pytest.fixture
-def report_note(request):
-    """
-    Records an observation against the step currently running, for something
-    worth reporting that isn't worth failing the run over — a slow response, a
-    cosmetic glitch, a value that looked off. The scenario still passes; the
-    note simply shows up under its step in the report.
-
-    Ask for it like any fixture, from a step definition:
-
-        @when("I add the following items to the cart:")
-        def add_items(inventory_page, datatable, report_note):
-            ...
-            report_note(f"cart badge took {elapsed:.1f}s to update")
-
-    A note only means something attached to a step, so calling it outside one
-    raises rather than quietly dropping what you wanted recorded.
-    """
-
-    def _report_note(message):
-        data = _scenario_data(request.node)
-        step = data["current"] if data else None
-        if step is None:
-            raise RuntimeError(
-                "report_note() has to be called from inside a Gherkin step — "
-                "there is no step running to attach this to."
-            )
-        step["notes"].append(str(message))
-
-    return _report_note
 
 # Screenshots and videos are linked, never inlined as base64.
 #
