@@ -104,6 +104,96 @@ def pytest_bdd_apply_tag(tag, function):
         return True
     return None
 
+
+# The Gherkin behind a test, recorded as it runs so the report can show the
+# scenario rather than the generated function name pytest-bdd derives from it.
+# Steps start out "skipped" and are marked as they execute, so whatever the run
+# never reached is visible as exactly that.
+SCENARIO = pytest.StashKey[dict]()
+
+
+def _scenario_data(node):
+    return node.stash.get(SCENARIO, None)
+
+
+def pytest_bdd_before_scenario(request, feature, scenario):
+    request.node.stash[SCENARIO] = {
+        "name": scenario.name,
+        "feature": feature.name,
+        "current": None,
+        "steps": [
+            {
+                "keyword": step.keyword,
+                "name": step.name,
+                "line": step.line_number,
+                "status": "skipped",
+                "notes": [],
+            }
+            for step in scenario.steps
+        ],
+    }
+
+
+def pytest_bdd_before_step(request, feature, scenario, step, step_func):
+    data = _scenario_data(request.node)
+    if data is None:
+        return
+    # Matched on line number rather than a running counter: it is unique within
+    # a feature file and survives a scenario outline rendering its steps anew.
+    for recorded in data["steps"]:
+        if recorded["line"] == step.line_number and recorded["status"] == "skipped":
+            recorded["status"] = "running"
+            data["current"] = recorded
+            return
+
+
+def pytest_bdd_after_step(request, feature, scenario, step, step_func, step_func_args):
+    data = _scenario_data(request.node)
+    if data and data["current"] is not None:
+        data["current"]["status"] = "passed"
+        data["current"] = None
+
+
+def pytest_bdd_step_error(
+    request, feature, scenario, step, step_func, step_func_args, exception
+):
+    data = _scenario_data(request.node)
+    if data and data["current"] is not None:
+        data["current"]["status"] = "failed"
+        data["current"] = None
+
+
+@pytest.fixture
+def report_note(request):
+    """
+    Records an observation against the step currently running, for something
+    worth reporting that isn't worth failing the run over — a slow response, a
+    cosmetic glitch, a value that looked off. The scenario still passes; the
+    note simply shows up under its step in the report.
+
+    Ask for it like any fixture, from a step definition:
+
+        @when("I add the following items to the cart:")
+        def add_items(inventory_page, datatable, report_note):
+            ...
+            report_note(f"cart badge took {elapsed:.1f}s to update")
+
+    A note only means something attached to a step, so calling it outside one
+    raises rather than quietly dropping what you wanted recorded.
+    """
+
+    def _report_note(message):
+        data = _scenario_data(request.node)
+        step = data["current"] if data else None
+        if step is None:
+            raise RuntimeError(
+                "report_note() has to be called from inside a Gherkin step — "
+                "there is no step running to attach this to."
+            )
+        step["notes"].append(str(message))
+
+    return _report_note
+
 # Screenshots and videos are linked, never inlined as base64.
 #
 # Inlining used to be the only option: Safari sandboxes a file:// page to its own
@@ -207,6 +297,38 @@ _OPEN_IMG_JS = (
     "d.body.appendChild(i);"
     "})(this)"
 )
+
+
+def _steps_extra(data: dict):
+    """
+    The scenario as Gherkin, attached whether it passed or failed.
+
+    A failing run stops at a step and leaves the rest untouched, which the
+    statuses show on their own — so no traceback here. The reason lives in the
+    log pytest-html already prints, and in the screenshot, video and trace below.
+    """
+    rows = []
+    for step in data["steps"]:
+        # Anything still "running" never reached after_step or step_error: the
+        # step is where the run came apart, whatever pytest-bdd made of it.
+        status = "failed" if step["status"] == "running" else step["status"]
+        notes = "".join(
+            f'<div class="step__note">{escape(n)}</div>' for n in step["notes"]
+        )
+        rows.append(
+            f'<li class="step step--{status}">'
+            f'<span class="step__keyword">{escape(step["keyword"])}</span> '
+            f'<span class="step__name">{escape(step["name"])}</span>'
+            f"{notes}"
+            f"</li>"
+        )
+
+    return extras.html(
+        f'<div class="artifact artifact--steps">'
+        f'<div class="artifact__label">Scenario: {escape(data["name"])}</div>'
+        f'<ol class="steps">{"".join(rows)}</ol>'
+        f"</div>"
+    )
 
 
 def _unreachable_extra(media: Path, report_dir: Path, kind: str, css: str):
@@ -348,14 +470,43 @@ def pytest_html_results_table_header(cells):
     _drop_links_column(cells)
 
 
+def _use_scenario_name(report, cells):
+    """
+    Puts the Gherkin scenario in the Test column.
+
+    pytest-bdd names the generated function after the scenario, so the node id
+    reads test_scrape_book_listings_to_csv (example), a name that exists nowhere in the
+    feature file you wrote. The scenario itself is what you recognise, so it
+    goes in the column, with the node id kept as the cell's tooltip for when you
+    need to find or rerun the thing.
+    """
+    title = getattr(report, "scenario_name", None)
+    if not title:
+        return
+    for index, cell in enumerate(cells):
+        if "col-testId" in str(cell):
+            cells[index] = (
+                f'<td class="col-testId" title="{escape(report.nodeid, quote=True)}">'
+                f"{escape(title)}</td>"
+            )
+            return
+
+
 def pytest_html_results_table_row(report, cells):
     _drop_links_column(cells)
+    _use_scenario_name(report, cells)
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
+
+    # The table-row hook is handed the report, never the item, so anything it
+    # needs has to travel on the report itself.
+    data = _scenario_data(item)
+    if data is not None:
+        report.scenario_name = data["name"]
 
     # "call" phase: the test body just ran. Only note the verdict here — the
     # artifacts don't exist on disk yet.
@@ -366,17 +517,24 @@ def pytest_runtest_makereport(item, call):
     # test-failed-1.png / video.webm / trace.zip, so only here can we reach them.
     # pytest-html gathers the extras of every phase into the one row it renders,
     # so hanging all three off the teardown report is fine.
-    if report.when == "teardown" and item.stash.get(TEST_FAILED, False):
+    if report.when == "teardown":
+        artifacts = []
+        report_dir = _report_dir(item.config)
+
+        # The steps go in whatever the outcome: a passing scenario is worth
+        # reading too, and it is the only place a report_note can show up.
+        if data is not None:
+            artifacts.append(_steps_extra(data))
+
         folder = item.stash.get(ARTIFACTS_DIR, None)
-        if folder is not None and folder.is_dir():
-            artifacts = []
-            report_dir = _report_dir(item.config)
+        if item.stash.get(TEST_FAILED, False) and folder is not None and folder.is_dir():
             for screenshot in sorted(folder.glob("test-failed-*.png")):
                 artifacts.append(_screenshot_extra(screenshot, report_dir))
             for video in sorted(folder.glob("video*.webm")):
                 artifacts.append(_video_extra(video, report_dir))
             for trace in sorted(folder.glob("trace*.zip")):
                 artifacts.append(_trace_extra(trace, report_dir))
-            artifacts = [a for a in artifacts if a is not None]
-            if artifacts:
-                report.extras = getattr(report, "extras", []) + artifacts
+
+        artifacts = [a for a in artifacts if a is not None]
+        if artifacts:
+            report.extras = getattr(report, "extras", []) + artifacts

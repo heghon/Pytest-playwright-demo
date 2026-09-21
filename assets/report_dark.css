@@ -32,6 +32,51 @@
   margin-bottom: 6px;
 }
 
+/* The Gherkin, one <li> per step. The status colour sits on a left border
+   rather than on the text, so a long step stays as readable as a short one. */
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  margin: 0 0 2px;
+  padding: 4px 8px;
+  border-left: 3px solid #d8d8d8;
+  line-height: 1.45;
+}
+
+.step__keyword {
+  font-weight: bold;
+}
+
+.step--passed {
+  border-left-color: #35a35f;
+}
+
+/* The step the run came apart on. Nothing here says why — the log above and
+   the artifacts below cover that. */
+.step--failed {
+  border-left-color: #c9372c;
+  background-color: #fdf2f1;
+}
+
+/* Never reached, because an earlier step stopped the run. */
+.step--skipped {
+  border-left-color: #e0e0e0;
+  color: #8a8a8a;
+}
+
+/* A report_note() — an observation that did not fail the scenario. */
+.step__note {
+  margin: 3px 0 0 12px;
+  padding-left: 8px;
+  border-left: 2px solid #d9a441;
+  font-size: 12px;
+  color: #6b5417;
+}
+
 /* Only rendered when the run is published somewhere the trace can be fetched
    from — see _trace_extra. Locally the command below is the only way in. */
 .artifact__link {
@@ -225,6 +270,29 @@
 
   .artifact__link:hover {
     background-color: #223244;
+  }
+
+  .step {
+    border-left-color: #3a3d42;
+  }
+
+  .step--passed {
+    border-left-color: #3fa96a;
+  }
+
+  .step--failed {
+    border-left-color: #e05a4f;
+    background-color: #2a1d1c;
+  }
+
+  .step--skipped {
+    border-left-color: #35383d;
+    color: #7f858d;
+  }
+
+  .step__note {
+    border-left-color: #b08432;
+    color: #d9b774;
   }
 
   .artifact__cmd {
