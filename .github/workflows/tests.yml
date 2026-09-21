@@ -92,6 +92,11 @@ jobs:
   # the Actions UI already times and folds each one separately.
   test:
     name: Run the tests suite and build the report
+    # Nothing here can work if the lock does not resolve — this job would only
+    # reach the same pip install and fail there, after spending a couple of
+    # minutes downloading a browser first. Waiting costs the length of the
+    # dependencies job on a good run and saves the browser download on a bad one.
+    needs: dependencies
     # Skipped on Dependabot's own pull requests, and only those: Dependabot is
     # handed a separate secret store, so DOTENV arrives empty and the suite would
     # fail on a missing login rather than on anything the bump did. The
@@ -218,10 +223,13 @@ jobs:
     # When the suite carries a deliberately failing scenario, test is red on every
     # run, but publish anyway. A failed run is exactly the one worth reading.
     #
-    # Pushes only: a pull request must not overwrite the published report with a
-    # run from an unmerged branch, and a Dependabot one has no permission to
-    # deploy in any case.
-    if: ${{ !cancelled() && needs.test.outputs.published == 'true' && github.event_name == 'push' }}
+    # Gated on the branch rather than the event. What must not happen is a run
+    # from somewhere other than main overwriting the published report — a pull
+    # request, or a manual run started against a side branch. Asking for a push
+    # instead also ruled out running the workflow by hand on main, which is the
+    # one case where you have deliberately picked an engine and want to see the
+    # result. Those runs still leave the report as a downloadable artifact.
+    if: ${{ !cancelled() && needs.test.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
 
     environment:
