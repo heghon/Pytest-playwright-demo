@@ -104,8 +104,12 @@ pytest --browser chromium --browser firefox --browser webkit
 
 The engine each scenario ran on shows up in the report's **Engine** column.
 
-On CI, pick an engine from the dropdown when starting the workflow by hand
-(Actions → Playwright Tests → Run workflow). Pushes use Chromium by default.
+On CI the suite only runs when you start it yourself — Actions → Playwright Tests
+→ Run workflow — where the same engines are a dropdown. Run it from `main` and the
+report is published to Pages. 
+The other triggers (on push, nightly, and a few
+more) are written out and commented at the top of
+[`.github/workflows/tests.yml`](.github/workflows/tests.yml), ready to switch on.
 
 ## Test report
 
@@ -142,9 +146,9 @@ every line as a deliberate choice and will happily bump a package like `pyee`
 past the range `playwright` allows — producing a lock that cannot be installed
 at all. The `# via` annotations are what keep that from happening.
 
-Dependabot opens a weekly PR for pip and for the Actions. CI runs on pull
-requests, and the `dependencies` job resolves the lock before anything else, so a bump
-that does not install fails on the PR instead of landing on `main`.
+Dependabot opens a weekly PR for pip and for the Actions. Its pull requests are
+the one case CI reacts to automatically: the `dependencies` job resolves the lock
+on the PR, so a bump that cannot be installed is caught before it reaches `main`.
 
 ## Updating Python
 

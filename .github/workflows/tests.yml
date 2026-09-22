@@ -1,11 +1,17 @@
 name: Playwright Tests
 
+# ──────────────────────────────────────────────────────────────────────────────
+# What starts this workflow.
+#
+# Two are live: starting it by hand, and a pull request — and a pull request only
+# does anything when Dependabot opened it (see the job conditions below). The
+# rest are written out but commented, so switching one on is a matter of removing
+# the #, not looking anything up. At least one trigger has to stay uncommented.
+# ──────────────────────────────────────────────────────────────────────────────
 on:
-  push:
-    branches: [main]
-  # Without this, nothing ran until a branch had already been merged — which is
-  # how a Dependabot bump that could not even be installed reached main.
-  pull_request:
+  # LIVE — start it yourself: Actions → Playwright Tests → Run workflow.
+  # The only trigger that lets you pick an engine, and the only one that
+  # publishes to Pages (the deploy job also insists on the main branch).
   workflow_dispatch:
     inputs:
       browser:
@@ -23,6 +29,62 @@ on:
           - firefox
           - webkit (safari)
           - msedge
+
+  # LIVE — but only Dependabot's own pull requests get past the job conditions.
+  # It is how a bump that cannot even be installed gets caught before merging,
+  # which is exactly how some breakage reached main once.
+  pull_request:
+
+  # Every push to main no matter where it comes from.
+  # push:
+  #   branches: [main]
+
+  # Only pushes that touch something able to change the outcome — no run for a
+  # README typo. Combine with the branches filter above.
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "stepdefs/**"
+  #     - "pages/**"
+  #     - "features/**"
+  #     - "utils/**"
+  #     - "requirements.txt"
+  #     - "pytest.ini"
+  #     - ".github/workflows/**"
+
+  # A nightly run, to catch the sites under test changing under you rather than
+  # your own code breaking. cron is UTC and has no timezone setting, so 06:00
+  # here is 08:00 in Paris in summer and 07:00 in winter (for example). Two more catches:
+  # scheduled runs can be delayed when GitHub is busy, and GitHub disables them
+  # after 60 days without repository activity.
+  # schedule:
+  #   - cron: "0 6 * * *"          # daily
+  #   - cron: "0 6 * * 1"          # or weekly, Monday morning
+
+  # When a tag is pushed — a release smoke test rather than a routine one.
+  # push:
+  #   tags: ["v*"]
+
+  # When a GitHub release is published, if you cut releases from the UI.
+  # release:
+  #   types: [published]
+
+  # After another workflow finishes, e.g. running the suite against whatever a
+  # deploy workflow just shipped. Named by workflow, not by file.
+  # workflow_run:
+  #   workflows: ["Deploy"]
+  #   types: [completed]
+
+  # Fired by an API call, so something outside GitHub can start a run — a deploy
+  # pipeline, or a Jira automation once an issue moves to "Ready for test":
+  #   curl -X POST -H "Authorization: token <PAT>" \
+  #     https://api.github.com/repos/heghon/Pytest-playwright-demo/dispatches \
+  #     -d '{"event_type":"run-tests"}'
+  # repository_dispatch:
+  #   types: [run-tests]
+
+  # While a pull request sits in a merge queue, if you ever enable one.
+  # merge_group:
 
 # Least privilege plus what Pages needs: pages to publish, id-token so
 # deploy-pages can mint its OIDC token.
@@ -45,6 +107,9 @@ jobs:
   # gets none of this repository's secrets.
   dependencies:
     name: Check the pinned dependencies resolve
+    # On a pull request this is for Dependabot alone — one of ours does nothing
+    # at all. Every other trigger runs it normally.
+    if: ${{ github.event_name != 'pull_request' || github.actor == 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -97,16 +162,15 @@ jobs:
     # minutes downloading a browser first. Waiting costs the length of the
     # dependencies job on a good run and saves the browser download on a bad one.
     needs: dependencies
-    # Skipped on Dependabot's own pull requests, and only those: Dependabot is
-    # handed a separate secret store, so DOTENV arrives empty and the suite would
-    # fail on a missing login rather than on anything the bump did. The
-    # dependencies job above is the check that means something there, and the
-    # full suite still runs the moment the PR is merged — that is a push to main.
+    # Never on a pull request, Dependabot's included. Dependabot is handed a
+    # separate secret store, so DOTENV arrives empty and the suite would fail on
+    # a missing login rather than on anything the bump did, the dependencies
+    # job above is the check that means something there. One of your own pull
+    # requests does nothing either, by the same rule as that job.
     #
-    # Written as "not a Dependabot pull request" rather than "not Dependabot" on
-    # purpose: a push is never skipped, so turning on Dependabot auto-merge later
-    # cannot quietly cost you the post-merge run.
-    if: ${{ github.event_name != 'pull_request' || github.actor != 'dependabot[bot]' }}
+    # Left as a condition rather than dropped, so that switching on push or
+    # schedule above is all it takes to get the suite running again.
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

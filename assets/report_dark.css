@@ -94,6 +94,16 @@
   border-bottom: none;
 }
 
+/* Issue keys stay on one line so the column keeps its width, and read as links
+   only when JIRA_BASE_URL gave them somewhere to point. */
+.col-jira {
+  white-space: nowrap;
+}
+
+.col-jira a {
+  color: #14539a;
+}
+
 /* Only a step carrying notes gets the pointer — the rest are inert on click. */
 .step__head--clickable {
   cursor: pointer;
@@ -344,6 +354,10 @@
 
   .step__table td {
     border-bottom-color: #2f3237;
+  }
+
+  .col-jira a {
+    color: #8ab8e8;
   }
 
   .step__toggle {

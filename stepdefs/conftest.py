@@ -560,14 +560,18 @@ def _engine_of(item):
     return chosen[0] if chosen else "chromium"
 
 
-def _insert_engine_cell(cells, cell):
+def _insert_after_test(cells, cell):
     """
-    Puts the engine straight after Test, in the header and in every row alike.
+    Puts a cell straight after Test, in the header and in every row alike.
 
     pytest-html pairs the two by index — _hydrate_data looks up
     table_header[index] to decide whether a cell is sortable — so the header and
     the rows have to agree on where the column sits, which is why both hooks
     below go through here.
+
+    Callers insert Engine first and Jira second, which lands them as
+    Test | Jira | Engine: the ticket belongs next to the scenario it covers,
+    and the engine is a detail of the run rather than of the test.
     """
     for index, existing in enumerate(cells):
         if "col-testId" in str(existing) or 'data-column-type="testId"' in str(existing):
@@ -576,10 +580,45 @@ def _insert_engine_cell(cells, cell):
     cells.append(cell)
 
 
+def _jira_keys_of(item):
+    """
+    The issue keys behind a scenario, from the @JIRA-xxx tags in its feature file.
+
+    pytest_bdd_apply_tag has already funnelled those tags into one jira_key
+    mark, so this only has to read them back off the item.
+    """
+    return [mark.args[0] for mark in item.iter_markers("jira_key") if mark.args]
+
+
+def _jira_cell(keys):
+    """
+    The issue keys, linked when JIRA_BASE_URL says where the site lives.
+
+    Without it the keys still show as plain text: a local run with no Jira
+    configured should look the same, minus the links.
+    """
+    if not keys:
+        return '<td class="col-jira"></td>'
+
+    base_url = os.getenv("JIRA_BASE_URL", "").strip().rstrip("/")
+    if base_url:
+        rendered = ", ".join(
+            f'<a href="{escape(f"{base_url}/browse/{quote(key)}", quote=True)}" '
+            f'target="_blank" rel="noopener">{escape(key)}</a>'
+            for key in keys
+        )
+    else:
+        rendered = escape(", ".join(keys))
+    return f'<td class="col-jira">{rendered}</td>'
+
+
 def pytest_html_results_table_header(cells):
     _drop_links_column(cells)
-    _insert_engine_cell(
+    _insert_after_test(
         cells, '<th class="sortable" data-column-type="engine">Engine</th>'
+    )
+    _insert_after_test(
+        cells, '<th class="sortable" data-column-type="jira">Jira</th>'
     )
 
 
@@ -609,7 +648,8 @@ def pytest_html_results_table_row(report, cells):
     _drop_links_column(cells)
     _use_scenario_name(report, cells)
     engine = getattr(report, "engine", "")
-    _insert_engine_cell(cells, f'<td class="col-engine">{escape(engine)}</td>')
+    _insert_after_test(cells, f'<td class="col-engine">{escape(engine)}</td>')
+    _insert_after_test(cells, _jira_cell(getattr(report, "jira_keys", [])))
 
 
 def pytest_html_results_table_html(report, data):
@@ -639,6 +679,7 @@ def pytest_runtest_makereport(item, call):
     if data is not None:
         report.scenario_name = data["name"]
     report.engine = _engine_of(item)
+    report.jira_keys = _jira_keys_of(item)
 
     # "call" phase: the test body just ran. Only note the verdict here — the
     # artifacts don't exist on disk yet.
