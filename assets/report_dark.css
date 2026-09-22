@@ -94,6 +94,68 @@
   border-bottom: none;
 }
 
+/*------------------
+ * Grouping headings
+ *
+ * Inserted into the results table by _GROUPING_JS in conftest.py: one heading
+ * per category folder, one per feature file inside it. Both are <tbody>
+ * elements, so they sit in the table without disturbing its column widths.
+ *------------------*/
+/* Every rule here is prefixed with #results-table on purpose. pytest-html sets
+   "#results-table th, #results-table td { padding: 5px }", and an id outranks
+   any number of classes — a plain .group td would lose the padding silently. */
+#results-table .group td {
+  padding: 7px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+#results-table .group--folder td {
+  border-top: 1px solid #e0e0e0;
+  font-size: 14px;
+  font-weight: bold;
+  background-color: #eef2f7;
+}
+
+/* Indented under its folder, and quieter, so the two levels read as a
+   hierarchy rather than as two kinds of heading. */
+#results-table .group--feature td {
+  padding-left: 42px;
+  font-size: 13px;
+  background-color: #f7f9fb;
+}
+
+.group__caret::before {
+  content: "▾";
+  display: inline-block;
+  width: 14px;
+  color: #8a8a8a;
+}
+
+.group.is-collapsed .group__caret::before {
+  content: "▸";
+}
+
+.group__count {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: normal;
+  color: #777;
+}
+
+.group__failed {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: normal;
+  color: #c9372c;
+}
+
+/* Folded away. A class rather than the hidden attribute, because pytest-html
+   sets a display on the result rows and would win against the UA default. */
+.is-hidden-row {
+  display: none;
+}
+
 /* Issue keys stay on one line so the column keeps its width, and read as links
    only when JIRA_BASE_URL gave them somewhere to point. */
 .col-jira {
@@ -358,6 +420,29 @@
 
   .col-jira a {
     color: #8ab8e8;
+  }
+
+  #results-table .group--folder td {
+    border-top-color: #3a3d42;
+    background-color: #2b2f36;
+    color: #e8eaed;
+  }
+
+  #results-table .group--feature td {
+    background-color: #24262b;
+    color: #cfd3d9;
+  }
+
+  .group__caret::before {
+    color: #7d838c;
+  }
+
+  .group__count {
+    color: #8b9099;
+  }
+
+  .group__failed {
+    color: #ff6b6b;
   }
 
   .step__toggle {

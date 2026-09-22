@@ -13,6 +13,7 @@ run against public practice websites.
 | `features/ui_testing/todo.feature` | `stepdefs/ui_testing/test_todo_e2e.py` | End-to-end UI testing | [demo.playwright.dev/todomvc](https://demo.playwright.dev/todomvc/) |
 | `features/scraping/books_scraping.feature` | `stepdefs/scraping/test_books_scraper.py` | Web scraping (outputs `scraped_books.csv`) | [books.toscrape.com](https://books.toscrape.com) |
 | `features/automation/checkout.feature` | `stepdefs/automation/test_checkout_flow.py` | Login + user flow automation | [saucedemo.com](https://www.saucedemo.com) |
+| `features/automation/login.feature` | `stepdefs/automation/test_login.py` | Negative paths, data-driven with a `Scenario Outline` | [saucedemo.com](https://www.saucedemo.com) |
 
 Scenarios are written in [Gherkin](https://cucumber.io/docs/gherkin/) (`features/`) and wired to Playwright via [pytest-bdd](https://pytest-bdd.readthedocs.io/) step definitions (`stepdefs/`) — the folder structure mirrors category by category.
 
@@ -113,7 +114,7 @@ more) are written out and commented at the top of
 
 ## Test report
 
-Every run writes `reports/`, a self-contained folder: `index.html` plus the failure artifacts under `test-artifacts/`. A failing scenario carries its own evidence inline — a screenshot, the video of the run, and a copyable `playwright show-trace` command, which resolves from `reports/` itself. Delete the folder and the run leaves no trace behind.
+Every run writes `reports/`, a self-contained folder: `index.html` plus the failure artifacts under `test-artifacts/`. Results are filed under the category folder and then the feature they came from, both foldable, so the table stays readable as the suite grows. A failing scenario carries its own evidence inline — a screenshot, the video of the run, and a copyable `playwright show-trace` command, which resolves from `reports/` itself. Delete the folder and the run leaves no trace behind.
 
 CI publishes the latest run to **[the live report](https://heghon.github.io/Pytest-playwright-demo/)**, where each failure also gets a one-click link into the [Playwright trace viewer](https://trace.playwright.dev/) — no download, no terminal. The same bundle is attached to every run as the `playwright-report` artifact if you'd rather read it offline.
 

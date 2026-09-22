@@ -155,10 +155,28 @@ def report_note(message):
     _current_step["notes"].append(str(message))
 
 
+def _category_of(rel_filename) -> str:
+    """
+    The folder a feature file lives in, or "" for one sitting loose in the
+    features directory — the report then simply has nothing to group it under
+    rather than inventing a category for it.
+
+    Read as "the directory holding the file" rather than by position, because
+    what rel_filename is relative to is not fixed: pytest-bdd hands over
+    "ui_testing/todo.feature" here, while its own parser builds the same path
+    with the features directory still on the front.
+    """
+    return Path(rel_filename).parent.name
+
+
 def pytest_bdd_before_scenario(request, feature, scenario):
     request.node.stash[SCENARIO] = {
         "name": scenario.name,
         "feature": feature.name,
+        # The category folder the feature file sits in, for the report's outer
+        # grouping. rel_filename is "features/automation/login.feature", so the
+        # first part is the base directory and the last is the file itself.
+        "folder": _category_of(feature.rel_filename),
         "current": None,
         "steps": [
             {
@@ -622,31 +640,65 @@ def pytest_html_results_table_header(cells):
     )
 
 
-def _use_scenario_name(report, cells):
+def _grouping_of(item, data):
     """
-    Puts the Gherkin scenario in the Test column.
+    The two headings a result is filed under in the report: its category folder
+    and the feature it belongs to.
+
+    A scenario takes both from its feature file. Anything else — a plain pytest
+    test added later, or a collection error — falls back to its own file, so a
+    test that never went near Gherkin still lands somewhere sensible instead of
+    in a nameless group.
+    """
+    if data is not None:
+        return data["folder"], data["feature"] or ""
+
+    path = getattr(item, "path", None)
+    if path is None:
+        return "", ""
+    return path.parent.name, path.stem
+
+
+def _rewrite_test_cell(report, cells):
+    """
+    Puts the Gherkin scenario in the Test column, and tags the cell with the
+    feature it came from.
 
     pytest-bdd names the generated function after the scenario, so the node id
     reads test_scrape_book_listings_to_csv (example), a name that exists nowhere in the
     feature file you wrote. The scenario itself is what you recognise, so it
     goes in the column, with the node id kept as the cell's tooltip for when you
     need to find or rerun the thing.
+
+    The two data attributes are what _GROUPING_JS groups the table on, and this
+    is the only cell guaranteed to be in every row — the Jira and Engine cells
+    can both legitimately be empty.
     """
     title = getattr(report, "scenario_name", None)
-    if not title:
-        return
+    folder = getattr(report, "group_folder", "")
+    feature = getattr(report, "group_feature", "")
     for index, cell in enumerate(cells):
         if "col-testId" in str(cell):
+            # A test with no scenario behind it keeps whatever pytest-html put
+            # in the cell; only the grouping is added.
+            label = escape(title) if title else _cell_text(str(cell))
             cells[index] = (
-                f'<td class="col-testId" title="{escape(report.nodeid, quote=True)}">'
-                f"{escape(title)}</td>"
+                f'<td class="col-testId" title="{escape(report.nodeid, quote=True)}" '
+                f'data-folder="{escape(folder, quote=True)}" '
+                f'data-feature="{escape(feature, quote=True)}">'
+                f"{label}</td>"
             )
             return
 
 
+def _cell_text(cell: str) -> str:
+    match = re.search(r"<td[^>]*>(.*)</td>", cell, re.S)
+    return match.group(1) if match else cell
+
+
 def pytest_html_results_table_row(report, cells):
     _drop_links_column(cells)
-    _use_scenario_name(report, cells)
+    _rewrite_test_cell(report, cells)
     engine = getattr(report, "engine", "")
     _insert_after_test(cells, f'<td class="col-engine">{escape(engine)}</td>')
     _insert_after_test(cells, _jira_cell(getattr(report, "jira_keys", [])))
@@ -668,6 +720,184 @@ def pytest_html_results_table_html(report, data):
         del data[:]
 
 
+# Regroups the results table under two foldable headings: the category folder a
+# feature file lives in, then the feature itself. Both come from the data
+# attributes _rewrite_test_cell puts on the Test cell, so a new folder or a new
+# feature file groups itself with nothing to register here.
+#
+# It has to be JavaScript rather than markup. pytest-html builds the table from
+# a JSON blob at load time and rebuilds it from scratch on every sort, filter
+# and expand — any <tbody> inserted from Python would be discarded by the first
+# click. So the grouping re-runs after each rebuild, watching for the moment
+# app.js swaps the table out.
+#
+# It travels in pytest_html_results_summary because that is the one hook whose
+# HTML is written into the page itself: a <script> there is parsed with the
+# document and runs before app.js, in time to catch even the first render.
+_GROUPING_JS = """
+<script>
+(function () {
+  var STORE = 'collapsedReportGroups';
+
+  function read() {
+    try { return new Set(JSON.parse(sessionStorage.getItem(STORE)) || []); }
+    catch (e) { return new Set(); }
+  }
+
+  /* Which groups are folded is kept in sessionStorage, the way pytest-html
+     already keeps its sort and its collapsed rows — so folding survives a
+     sort, a filter, and a reload of the page. */
+  var collapsed = read();
+
+  /* Every heading seen so far, so "Hide all details" can fold the ones a
+     filter is currently keeping off the table as well as the ones on it. */
+  var known = new Set();
+
+  function save() {
+    try { sessionStorage.setItem(STORE, JSON.stringify(Array.from(collapsed))); }
+    catch (e) {}
+  }
+
+  function counts(bodies) {
+    var bad = bodies.filter(function (body) {
+      return body.classList.contains('failed') || body.classList.contains('error');
+    }).length;
+    return {
+      total: bodies.length + (bodies.length === 1 ? ' test' : ' tests'),
+      bad: bad,
+    };
+  }
+
+  function heading(kind, key, name, bodies) {
+    var columns = document.querySelectorAll('#results-table-head th').length || 1;
+    var tally = counts(bodies);
+    var tbody = document.createElement('tbody');
+    tbody.className = 'group group--' + kind;
+    tbody.dataset.groupKey = key;
+    known.add(key);
+    tbody.innerHTML =
+      '<tr><td colspan="' + columns + '">' +
+        '<span class="group__caret"></span>' +
+        '<span class="group__name"></span>' +
+        '<span class="group__count">' + tally.total + '</span>' +
+        (tally.bad ? '<span class="group__failed">' + tally.bad + ' failed</span>' : '') +
+      '</td></tr>';
+    /* textContent rather than innerHTML: a feature is named in a .feature file,
+       which is not ours to trust as markup. */
+    tbody.querySelector('.group__name').textContent = name;
+    tbody.addEventListener('click', function () {
+      if (collapsed.has(key)) { collapsed.delete(key); } else { collapsed.add(key); }
+      save();
+      apply();
+    });
+    return tbody;
+  }
+
+  function apply() {
+    var table = document.getElementById('results-table');
+    if (!table) { return; }
+    Array.prototype.forEach.call(table.tBodies, function (body) {
+      if (body.classList.contains('group')) {
+        body.classList.toggle('is-collapsed', collapsed.has(body.dataset.groupKey));
+        /* A feature heading disappears with the folder it belongs to. */
+        body.classList.toggle('is-hidden-row',
+          !!body.dataset.parentKey && collapsed.has(body.dataset.parentKey));
+      } else if (body.dataset.featureKey) {
+        body.classList.toggle('is-hidden-row',
+          collapsed.has(body.dataset.featureKey) || collapsed.has(body.dataset.folderKey));
+      }
+    });
+  }
+
+  function build(table) {
+    if (!table || table.dataset.grouped) { return; }
+    table.dataset.grouped = '1';
+
+    var bodies = Array.prototype.filter.call(table.tBodies, function (body) {
+      return body.querySelector('.col-testId');
+    });
+    if (!bodies.length) { return; }
+
+    /* Bucketed in the order the rows already have, so whatever column the
+       table is sorted on still decides the order inside each feature. */
+    var folders = new Map();
+    bodies.forEach(function (body) {
+      var cell = body.querySelector('.col-testId');
+      var folder = cell.dataset.folder || '';
+      var feature = cell.dataset.feature || '';
+      body.dataset.folderKey = folder ? 'folder:' + folder : '';
+      body.dataset.featureKey = 'folder:' + folder + '/' + feature;
+      if (!folders.has(folder)) { folders.set(folder, new Map()); }
+      var features = folders.get(folder);
+      if (!features.has(feature)) { features.set(feature, []); }
+      features.get(feature).push(body);
+    });
+
+    var fragment = document.createDocumentFragment();
+    folders.forEach(function (features, folder) {
+      var folderKey = 'folder:' + folder;
+      var everything = [];
+      features.forEach(function (list) { everything = everything.concat(list); });
+      /* A feature file sitting loose in the features directory has no folder to
+         file it under, so its own heading becomes the top level. */
+      if (folder) {
+        fragment.appendChild(heading('folder', folderKey, folder, everything));
+      }
+      features.forEach(function (list, feature) {
+        var head = heading('feature', folderKey + '/' + feature, feature, list);
+        if (folder) { head.dataset.parentKey = folderKey; }
+        fragment.appendChild(head);
+        list.forEach(function (body) { fragment.appendChild(body); });
+      });
+    });
+    /* The rows are already children of the table, so this reorders them in
+       place rather than cloning anything — their click handlers come along. */
+    table.appendChild(fragment);
+    apply();
+  }
+
+  /* "Show all details" and "Hide all details" read as "open everything" and
+     "close everything", so they fold the headings too rather than leaving two
+     levels of the table untouched. pytest-html binds its own handler to these
+     later; both run, and its redraw lands on the state set here. */
+  function foldEverything(folded) {
+    if (folded) {
+      known.forEach(function (key) { collapsed.add(key); });
+    } else {
+      collapsed.clear();
+    }
+    save();
+    apply();
+  }
+
+  [['show_all_details', false], ['hide_all_details', true]].forEach(function (pair) {
+    var button = document.getElementById(pair[0]);
+    if (button) {
+      button.addEventListener('click', function () { foldEverything(pair[1]); });
+    }
+  });
+
+  var regroup = function () { build(document.getElementById('results-table')); };
+
+  /* app.js replaces the whole table on every redraw, which shows up as a child
+     change on <body>. Watching childList only, and never touching <body>
+     ourselves, means our own reordering cannot set this off again. */
+  new MutationObserver(regroup).observe(document.body, { childList: true });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', regroup);
+  } else {
+    regroup();
+  }
+})();
+</script>
+"""
+
+
+def pytest_html_results_summary(postfix):
+    postfix.append(_GROUPING_JS)
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
@@ -678,6 +908,7 @@ def pytest_runtest_makereport(item, call):
     data = _scenario_data(item)
     if data is not None:
         report.scenario_name = data["name"]
+    report.group_folder, report.group_feature = _grouping_of(item, data)
     report.engine = _engine_of(item)
     report.jira_keys = _jira_keys_of(item)
 
