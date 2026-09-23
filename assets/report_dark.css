@@ -156,6 +156,14 @@
   display: none;
 }
 
+/* An API test runs no browser, and the Engine column says so rather than
+   leaving a blank to wonder about. Toned down, because it answers the column's
+   question instead of reporting a result. */
+#results-table .col-engine--none {
+  font-style: italic;
+  color: #8a8a8a;
+}
+
 /* Issue keys stay on one line so the column keeps its width, and read as links
    only when JIRA_BASE_URL gave them somewhere to point. */
 .col-jira {
@@ -420,6 +428,10 @@
 
   .col-jira a {
     color: #8ab8e8;
+  }
+
+  #results-table .col-engine--none {
+    color: #7d838c;
   }
 
   #results-table .group--folder td {

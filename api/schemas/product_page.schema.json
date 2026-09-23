@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Product page",
+  "description": "The pagination envelope around a list of products. Only the envelope: the products inside it are checked one by one against the product schema, which keeps a failure pointing at the product that broke rather than at the whole page.",
+  "type": "object",
+  "required": ["products", "total", "skip", "limit"],
+  "properties": {
+    "products": { "type": "array", "items": { "type": "object" } },
+    "total": { "type": "integer", "minimum": 0 },
+    "skip": { "type": "integer", "minimum": 0 },
+    "limit": { "type": "integer", "minimum": 0 }
+  }
+}

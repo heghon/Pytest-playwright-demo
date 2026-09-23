@@ -557,15 +557,27 @@ def pytest_html_report_title(report):
     report.title = "Curtain Call"
 
 
+# What the Engine column says for a test that runs no browser at all. Styled
+# down in the stylesheet so it reads as an answer rather than as a result.
+NO_BROWSER = "no browser"
+
+
 def _engine_of(item):
     """
-    Which engine ran this test.
+    Which engine ran this test, or NO_BROWSER for one that never opened a page.
 
     The channel wins when there is one: --browser-channel chrome still reports a
     browser_name of "chromium", and "chrome" is the more useful answer. Falls
     back to --browser for a run with a single engine, where pytest-playwright
     never parameterises and so there is no callspec to read.
+
+    An API test has no browser_name in its closure — see the override in
+    stepdefs/api/conftest.py — so naming an engine for it would be an untruth.
+    An empty cell would only raise the question; the label answers it.
     """
+    if "browser_name" not in item.fixturenames:
+        return NO_BROWSER
+
     channel = item.config.getoption("--browser-channel", None)
     if channel:
         return channel
@@ -700,7 +712,8 @@ def pytest_html_results_table_row(report, cells):
     _drop_links_column(cells)
     _rewrite_test_cell(report, cells)
     engine = getattr(report, "engine", "")
-    _insert_after_test(cells, f'<td class="col-engine">{escape(engine)}</td>')
+    engine_class = "col-engine col-engine--none" if engine == NO_BROWSER else "col-engine"
+    _insert_after_test(cells, f'<td class="{engine_class}">{escape(engine)}</td>')
     _insert_after_test(cells, _jira_cell(getattr(report, "jira_keys", [])))
 
 

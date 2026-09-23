@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Product",
+  "description": "The contract this project depends on, not an inventory of everything the endpoint returns. additionalProperties is left open on purpose: a field the API adds is not a breakage, while a field we rely on changing type or disappearing is exactly what these tests exist to catch.",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "category",
+    "price",
+    "rating",
+    "stock",
+    "tags",
+    "dimensions",
+    "thumbnail"
+  ],
+  "properties": {
+    "id": { "type": "integer", "minimum": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "category": { "type": "string", "minLength": 1 },
+    "price": { "type": "number", "exclusiveMinimum": 0 },
+    "discountPercentage": { "type": "number", "minimum": 0, "maximum": 100 },
+    "rating": { "type": "number", "minimum": 0, "maximum": 5 },
+    "stock": { "type": "integer", "minimum": 0 },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "dimensions": {
+      "type": "object",
+      "required": ["width", "height", "depth"],
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "depth": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "thumbnail": {
+      "type": "string",
+      "pattern": "^https://"
+    }
+  }
+}

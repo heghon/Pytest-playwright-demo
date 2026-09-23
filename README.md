@@ -14,8 +14,12 @@ run against public practice websites.
 | `features/scraping/books_scraping.feature` | `stepdefs/scraping/test_books_scraper.py` | Web scraping (outputs `scraped_books.csv`) | [books.toscrape.com](https://books.toscrape.com) |
 | `features/automation/checkout.feature` | `stepdefs/automation/test_checkout_flow.py` | Login + user flow automation | [saucedemo.com](https://www.saucedemo.com) |
 | `features/automation/login.feature` | `stepdefs/automation/test_login.py` | Negative paths, data-driven with a `Scenario Outline` | [saucedemo.com](https://www.saucedemo.com) |
+| `features/api/products.feature` | `stepdefs/api/test_products.py` | API testing — status codes, JSON Schema, pagination | [dummyjson.com](https://dummyjson.com) |
+| `features/api/auth.feature` | `stepdefs/api/test_auth.py` | API testing — tokens and rejected authentication | [dummyjson.com](https://dummyjson.com) |
 
 Scenarios are written in [Gherkin](https://cucumber.io/docs/gherkin/) (`features/`) and wired to Playwright via [pytest-bdd](https://pytest-bdd.readthedocs.io/) step definitions (`stepdefs/`) — the folder structure mirrors category by category.
+
+Browser scenarios drive page objects in `pages/`; the API scenarios drive clients in `api/` and check responses against the [JSON Schema](https://json-schema.org/) documents in `api/schemas/`. The API tests use Playwright's own HTTP client, so they need no extra dependency and start no browser.
 
 ## Setup
 
@@ -76,6 +80,7 @@ Run one category, by Gherkin tag:
 pytest -m ui           # just the UI scenario(s)
 pytest -m scraping     # just the scraping scenario(s)
 pytest -m automation   # just the automation scenario(s)
+pytest -m api          # just the API scenario(s), no browser started
 ```
 
 Run one file directly:
