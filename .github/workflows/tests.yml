@@ -30,6 +30,32 @@ on:
           - webkit (safari)
           - msedge
 
+      marker:
+        description: "Which scenarios to run"
+        type: choice
+        default: all
+        options:
+          # This list cannot be generated and has to be updated with every new non-jira tag.
+          #
+          # What it can be is impossible to forget: the dependencies job reads
+          # the markers back out of pytest.ini and fails if this list has
+          # drifted, so a new tag cannot quietly go missing from the dropdown.
+          # Keep "all" first and the rest alphabetical, which is what it checks.
+          - all
+          - api
+          - automation
+          - scraping
+          - ui
+
+      jira:
+        description: "Or one JIRA issue — 105 or JIRA-105. Wins over the choice above."
+        # Free text, because the issues are in JIRA and the dropdown cannot go
+        # and read them. Nothing validates this before the run starts, so the
+        # --jira option it feeds answers a key that matches nothing with the
+        # list of keys that do exist, rather than a silent empty run.
+        type: string
+        default: ""
+
   # LIVE — but only Dependabot's own pull requests get past the job conditions.
   # It is how a bump that cannot even be installed gets caught before merging,
   # which is exactly how some breakage reached main once.
@@ -150,6 +176,53 @@ jobs:
             exit 1
           fi
 
+      # The tag dropdown on the Run workflow form has to be written out by hand,
+      # see the comment on that input. This is what stops it going stale: add
+      # a marker to pytest.ini, forget the dropdown, and the next run fails here
+      # with the list to paste in. It needs no browsers and no project install,
+      # so it belongs in this job rather than the slow one.
+      - name: Dependencies · Confirm the tag dropdown lists every marker
+        run: |
+          pip install pyyaml
+          python - <<'PY'
+          import configparser
+          import sys
+          import yaml
+
+          # Markers that select a category of scenarios. jira_key is not one:
+          # it hangs an issue key on a test and selects nothing by itself, which
+          # is why --jira exists at all.
+          NOT_A_CATEGORY = {"jira_key"}
+
+          ini = configparser.ConfigParser()
+          ini.read("pytest.ini")
+          declared = sorted(
+              name
+              for name in (
+                  line.split(":", 1)[0].strip()
+                  for line in ini["pytest"]["markers"].strip().splitlines()
+                  if line.strip()
+              )
+              if name not in NOT_A_CATEGORY
+          )
+
+          workflow = yaml.safe_load(open(".github/workflows/tests.yml"))
+          # YAML 1.1 reads a bare "on" as the boolean true, so the trigger block
+          # is not filed under the key it looks like it is filed under.
+          triggers = workflow.get("on", workflow.get(True))
+          options = triggers["workflow_dispatch"]["inputs"]["marker"]["options"]
+          offered = sorted(tag for tag in options if tag != "all")
+
+          if offered != declared:
+              print("::error::The tag dropdown in tests.yml no longer matches pytest.ini.")
+              print(f"  markers in pytest.ini   : {', '.join(declared)}")
+              print(f"  options in the dropdown : {', '.join(offered)}")
+              print("  Update the 'marker' input to match, keeping 'all' first.")
+              sys.exit(1)
+
+          print(f"Dropdown is in step with pytest.ini: all, {', '.join(declared)}")
+          PY
+
   # Setup, test and report stay in one job on purpose: every job gets its own
   # fresh runner, so splitting them would mean re-checking-out and
   # re-installing the browsers each time, then shuttling the report between
@@ -239,12 +312,30 @@ jobs:
           printf '%s\n' "$DOTENV" > .env
 
       - name: Tests · Run the Playwright test suite
+        env:
+          MARKER: ${{ inputs.marker || 'all' }}
+          JIRA: ${{ inputs.jira }}
         run: |
+          # Built as an array rather than a string of flags: "-m api" has to
+          # reach pytest as two arguments, and a quoted string would arrive as
+          # one. Plain if blocks rather than "[ ... ] && ...", because the step
+          # runs under bash -e and a false test on the last line would fail it.
+          ARGS=(--browser "$ENGINE")
           if [ -n "$CHANNEL" ]; then
-            pytest --browser "$ENGINE" --browser-channel "$CHANNEL"
-          else
-            pytest --browser "$ENGINE"
+            ARGS+=(--browser-channel "$CHANNEL")
           fi
+          # A JIRA issue is the narrower request, so it wins. Asking for both is
+          # a contradiction rather than an error — say which one is being used.
+          if [ -n "$JIRA" ]; then
+            if [ "$MARKER" != "all" ]; then
+              echo "::notice::Both a tag and an issue were given — running $JIRA and ignoring the '$MARKER' tag."
+            fi
+            ARGS+=(--jira "$JIRA")
+          elif [ "$MARKER" != "all" ]; then
+            ARGS+=(-m "$MARKER")
+          fi
+          echo "Running: pytest ${ARGS[*]}"
+          pytest "${ARGS[@]}"
 
       # No assembling left to do: --output puts the failure artifacts under
       # reports/ and --html names the report index.html, so the folder pytest
@@ -293,7 +384,18 @@ jobs:
     # instead also ruled out running the workflow by hand on main, which is the
     # one case where you have deliberately picked an engine and want to see the
     # result. Those runs still leave the report as a downloadable artifact.
-    if: ${{ !cancelled() && needs.test.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+    #
+    # A filtered run does not publish either, for the same reason. The address
+    # in the README is where someone goes to see how the project stands, and a
+    # report holding four API scenarios would answer that question wrongly while
+    # looking perfectly healthy. Picking a tag or an issue is a question you are
+    # asking yourself, so the answer stays in the run's own artifact.
+    if: >-
+      ${{ !cancelled()
+      && needs.test.outputs.published == 'true'
+      && github.ref == 'refs/heads/main'
+      && (github.event_name != 'workflow_dispatch'
+          || (inputs.marker == 'all' && inputs.jira == '')) }}
     runs-on: ubuntu-latest
 
     environment:

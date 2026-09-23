@@ -83,6 +83,16 @@ pytest -m automation   # just the automation scenario(s)
 pytest -m api          # just the API scenario(s), no browser started
 ```
 
+Run everything tagged with one issue:
+```bash
+pytest --jira JIRA-105
+pytest --jira 105        # the JIRA- prefix is optional
+```
+
+`-m` cannot do this: the `@JIRA-xxx` tags are folded into a single `jira_key`
+marker that carries the key as an argument, and `-m` only matches marker names.
+A key nothing is tagged with reports the keys that exist rather than running nothing.
+
 Run one file directly:
 ```bash
 pytest stepdefs/ui_testing/test_todo_e2e.py
@@ -111,8 +121,11 @@ pytest --browser chromium --browser firefox --browser webkit
 The engine each scenario ran on shows up in the report's **Engine** column.
 
 On CI the suite only runs when you start it yourself — Actions → Playwright Tests
-→ Run workflow — where the same engines are a dropdown. Run it from `main` and the
-report is published to Pages. 
+→ Run workflow — where the same engines are a dropdown, alongside one for the tag
+to run and a free-text box for a single JIRA issue. The issue wins over the tag if
+both are given. Run the whole suite from `main` and the report is published to
+Pages; a run narrowed to one tag or one issue stays as a downloadable artifact
+instead, so a partial result never replaces the published one. 
 The other triggers (on push, nightly, and a few
 more) are written out and commented at the top of
 [`.github/workflows/tests.yml`](.github/workflows/tests.yml), ready to switch on.

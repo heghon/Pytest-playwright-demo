@@ -111,6 +111,45 @@ def pytest_bdd_apply_tag(tag, function):
     return None
 
 
+def _normalised_key(raw: str) -> str:
+    key = raw.strip().upper()
+    return key if key.startswith("JIRA-") else f"JIRA-{key}"
+
+
+def pytest_collection_modifyitems(config, items):
+    """
+    Implements --jira, because -m cannot. The flag itself is declared in the
+    root conftest.py, which is the only place pytest reads options from.
+
+    pytest_bdd_apply_tag above funnels every @JIRA-xxx tag into one jira_key
+    mark and keeps the issue itself as the mark's *argument*. That is what stops
+    pytest.ini becoming a JIRA export, but -m only ever matches a mark's name:
+    "-m JIRA-105" matches nothing at all, and "-m jira_key" matches every tagged
+    scenario in the suite. Reading the arguments back at collection time is the
+    only way to select one issue.
+    """
+    requested = config.getoption("--jira")
+    if not requested:
+        return
+
+    wanted = _normalised_key(requested)
+    selected, deselected = [], []
+    for item in items:
+        selected.append(item) if wanted in _jira_keys_of(item) else deselected.append(item)
+
+    if not selected:
+        # Better than "no tests ran": the likeliest cause is a typo, and the
+        # answer to it is the list of keys that do exist.
+        known = sorted({key for item in items for key in _jira_keys_of(item)})
+        raise pytest.UsageError(
+            f"No scenario is tagged {wanted}. "
+            f"Tagged in this run: {', '.join(known) if known else 'none'}."
+        )
+
+    config.hook.pytest_deselected(items=deselected)
+    items[:] = selected
+
+
 # The Gherkin behind a test, recorded as it runs so the report can show the
 # scenario rather than the generated function name pytest-bdd derives from it.
 # Steps start out "skipped" and are marked as they execute, so whatever the run
