@@ -42,7 +42,7 @@ parse==1.22.1
     #   pytest-bdd
 parse-type==0.6.6
     # via pytest-bdd
-playwright==1.62.0
+playwright==1.63.0
     # via
     #   -r requirements.in
     #   pytest-playwright
