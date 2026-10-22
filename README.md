@@ -2,9 +2,10 @@
 
 # Pytest-Playwright Demo
 
-A demo project showcasing three classic browser automation patterns using
+A demo project showcasing four classic test automation patterns — UI testing,
+scraping, user flow automation and API testing — using
 [Playwright](https://playwright.dev/python/) and [pytest](https://docs.pytest.org/),
-run against public practice websites.
+run against public practice websites and APIs.
 
 ## What's included
 
@@ -32,8 +33,8 @@ Browser scenarios drive page objects in `pages/`; the API scenarios drive client
 2. Create and activate a virtual environment:
    - For Windows :
    ```bash
-   python3 -m venv venv
-   source venv\Scripts\activate
+   python -m venv venv
+   venv\Scripts\activate
    ```
    - For the rest of the world :
    ```bash
@@ -81,7 +82,11 @@ pytest -m ui           # just the UI scenario(s)
 pytest -m scraping     # just the scraping scenario(s)
 pytest -m automation   # just the automation scenario(s)
 pytest -m api          # just the API scenario(s), no browser started
+pytest -m smoke        # the framework self-check, no browser and no network
 ```
+
+The smoke scenarios are left out of every other run, including a plain `pytest`,
+so they never show up in the published report. CI runs them on Dependabot's pull requests only.
 
 Run everything tagged with one issue:
 ```bash
@@ -165,9 +170,13 @@ every line as a deliberate choice and will happily bump a package like `pyee`
 past the range `playwright` allows — producing a lock that cannot be installed
 at all. The `# via` annotations are what keep that from happening.
 
-Dependabot opens a weekly PR for pip and for the Actions. Its pull requests are
-the one case CI reacts to automatically: the `dependencies` job resolves the lock
-on the PR, so a bump that cannot be installed is caught before it reaches `main`.
+Dependabot opens a weekly PR for pip and for the Actions. Minor and patch
+updates arrive grouped in one PR; a major version gets a PR of its own, since
+that is where breaking changes live. Its pull requests are the one case CI reacts
+to automatically: the `dependencies` job resolves the lock on the PR, so a bump
+that cannot be installed is caught before it reaches `main`, and the `smoke` job
+then collects the whole suite and runs `pytest -m smoke`, so a bump that installs
+but breaks the framework is caught too.
 
 ## Updating Python
 

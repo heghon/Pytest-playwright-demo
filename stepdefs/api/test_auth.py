@@ -63,7 +63,9 @@ def request_profile_anonymously(auth_api, api_call):
     record(api_call, auth_api.get_current_user(), "GET", "no Authorization header")
 
 
-"""
+@when(parsers.parse('I request my own profile with the token "{token}"'))
+def request_profile_with_bad_token(auth_api, api_call, token):
+    """
     Calls a protected endpoint with a token that is not one.
 
     The note is the point of this step. The API answers 500 where 401 belongs,
@@ -71,9 +73,7 @@ def request_profile_anonymously(auth_api, api_call):
     indistinguishable from a broken test. The note says whose bug it is, right
     above the failure in the report, and it is conditional: fix the API and it
     stops being written at all.
-"""
-@when(parsers.parse('I request my own profile with the token "{token}"'))
-def request_profile_with_bad_token(auth_api, api_call, token):
+    """
     response = record(
         api_call,
         auth_api.get_current_user(token),

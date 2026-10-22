@@ -39,15 +39,15 @@ def check_page_skip(api_call, skip):
     assert reported == skip, f"Asked to skip {skip}, the page reports {reported}."
 
 
-"""
+@then(parsers.parse('every product on the page should match the "{schema}" schema'))
+def check_every_product(api_call, schema):
+    """
     Validates each product in its own right rather than the array as a whole.
 
     A single schema over the list would name the failure "$.products[7].price",
     which means counting entries in a body of ten to find the culprit. Going one
     by one puts the product's own id and title in the message instead.
-"""
-@then(parsers.parse('every product on the page should match the "{schema}" schema'))
-def check_every_product(api_call, schema):
+    """
     products = body(api_call)["products"]
     assert products, f"{latest(api_call).url} returned an empty page of products."
     for product in products:

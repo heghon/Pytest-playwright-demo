@@ -1,4 +1,3 @@
-import pytest
 from pytest_bdd import scenarios, given, when, then, parsers
 from pages.saucedemo.cart_page import CartPage
 from pages.saucedemo.checkout_page import CheckoutPage
@@ -9,8 +8,7 @@ scenarios("automation/checkout.feature")
 
 @given("I am logged in to SauceDemo", target_fixture="inventory_page")
 def logged_in(logged_in_inventory_page):
-    report_note("Login try")
-    report_note("Just another line to test")
+    report_note("I am correctly looged in")
     return logged_in_inventory_page
 
 

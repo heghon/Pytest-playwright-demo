@@ -1,5 +1,5 @@
 import pytest
-from pytest_bdd import scenarios, given, when, then, parsers
+from pytest_bdd import scenarios, given, when, then
 from pages.todomvc.todo_page import TodoPage
 
 scenarios("ui_testing/todo.feature")
@@ -28,13 +28,13 @@ def check_todos(todo_page, datatable):
     todo_page.expect_todo_texts(expected_texts)
 
 
-@when(parsers.parse('I mark the following todo(s) as completed:'))
+@when("I mark the following todo(s) as completed:")
 def mark_todo_completed(todo_page, datatable):
     for row in datatable:
         todo_page.complete_todo_by_text(row[0])
 
 
-@then(parsers.parse('The following todo(s) should be marked as completed:'))
+@then("The following todo(s) should be marked as completed:")
 def check_todo_completed(todo_page, datatable):
     for row in datatable:
-            todo_page.expect_todo_completed_by_text(row[0])
+        todo_page.expect_todo_completed_by_text(row[0])

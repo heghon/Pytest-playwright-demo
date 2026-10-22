@@ -135,7 +135,10 @@ def pytest_collection_modifyitems(config, items):
     wanted = _normalised_key(requested)
     selected, deselected = [], []
     for item in items:
-        selected.append(item) if wanted in _jira_keys_of(item) else deselected.append(item)
+        if wanted in _jira_keys_of(item):
+            selected.append(item)
+        else:
+            deselected.append(item)
 
     if not selected:
         # Better than "no tests ran": the likeliest cause is a typo, and the
@@ -213,8 +216,7 @@ def pytest_bdd_before_scenario(request, feature, scenario):
         "name": scenario.name,
         "feature": feature.name,
         # The category folder the feature file sits in, for the report's outer
-        # grouping. rel_filename is "features/automation/login.feature", so the
-        # first part is the base directory and the last is the file itself.
+        # grouping —> see _category_of for why it is read from the end.
         "folder": _category_of(feature.rel_filename),
         "current": None,
         "steps": [
@@ -272,7 +274,6 @@ def pytest_bdd_step_error(
         data["current"]["status"] = "failed"
         data["current"] = None
     _current_step = None
-
 
 
 # Screenshots and videos are linked, never inlined as base64.

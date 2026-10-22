@@ -7,15 +7,15 @@ from jsonschema import Draft202012Validator
 SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
 
 
-"""
+@lru_cache(maxsize=None)
+def load_schema(name: str) -> dict:
+    """
     Reads schemas/<name>.schema.json, once per name per session.
 
     A missing schema says which ones do exist, because the name comes from a
     feature file — a typo there is a sentence a human wrote, not a stack trace
     they want to read.
-"""
-@lru_cache(maxsize=None)
-def load_schema(name: str) -> dict:
+    """
     path = SCHEMA_DIR / f"{name}.schema.json"
     if not path.is_file():
         available = sorted(p.name.removesuffix(".schema.json") for p in SCHEMA_DIR.glob("*.schema.json"))
@@ -26,7 +26,8 @@ def load_schema(name: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-"""
+def assert_matches_schema(payload, name: str, described_as: str = "payload") -> None:
+    """
     Checks a payload against a named schema, reporting every violation.
 
     jsonschema.validate() raises on the first problem it meets, which turns a
@@ -34,8 +35,7 @@ def load_schema(name: str) -> dict:
     collects the lot, so one failed scenario tells the whole story — and each
     line is prefixed with the JSON path, so "$.dimensions.width" points at the
     exact field instead of leaving you to search the body for it.
-"""
-def assert_matches_schema(payload, name: str, described_as: str = "payload") -> None:
+    """
     validator = Draft202012Validator(load_schema(name))
     errors = sorted(validator.iter_errors(payload), key=lambda error: error.json_path)
     if not errors:

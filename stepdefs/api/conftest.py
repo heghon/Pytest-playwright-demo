@@ -40,7 +40,9 @@ def _artifacts_dir():
     return None
 
 
-"""
+@pytest.fixture
+def api_request_context(playwright):
+    """
     A fresh APIRequestContext per scenario.
 
     It is Playwright's own HTTP client — the same driver as the browser tests,
@@ -53,9 +55,7 @@ def _artifacts_dir():
     previous scenario's login, and gets a 200. A context is cheap precisely
     because no browser is involved, so there is nothing to save by reusing it
     and a false pass to be had by trying.
-"""
-@pytest.fixture
-def api_request_context(playwright):
+    """
     context = playwright.request.new_context(
         base_url=BASE_URL,
         timeout=REQUEST_TIMEOUT_MS,
@@ -79,7 +79,9 @@ def api_credentials():
     return {"username": USERNAME, "password": PASSWORD}
 
 
-"""
+@pytest.fixture
+def api_call():
+    """
     A scratchpad for the response under examination, passed from the step that
     sends a request to the steps that check it.
 
@@ -88,9 +90,7 @@ def api_credentials():
     token unlocked has two responses in flight. One mutable holder keeps "the
     response" meaning the most recent one. A fixture rather than a module
     global, so pytest clears it between scenarios.
-"""
-@pytest.fixture
-def api_call():
+    """
     return {}
 
 
@@ -139,7 +139,8 @@ def _preview(response) -> str:
     return _shortened(rendered)
 
 
-"""
+def record(api_call, response, method, detail=None):
+    """
     Stores the response, and leaves a trail of it in the report.
 
     An API scenario has nothing to look at: no screenshot, no video, and a row
@@ -147,8 +148,7 @@ def _preview(response) -> str:
     completely different one. These two notes are the evidence — what went out,
     and what came back — written once here so every call reports itself the
     same way instead of each step inventing its own wording.
-"""
-def record(api_call, response, method, detail=None):
+    """
     api_call["response"] = response
     path = response.url.removeprefix(BASE_URL) or "/"
     context = f" ({detail})" if detail else ""

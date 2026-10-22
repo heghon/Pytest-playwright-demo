@@ -12,14 +12,14 @@ class BaseApiClient:
     def __init__(self, request_context: APIRequestContext):
         self.request = request_context
 
-    """
-    The response body as Python, with a readable failure when it isn't JSON.
-    Playwright's own .json() raises a bare decode error that names neither the
-    call that produced it nor what came back instead, which is a miserable
-    thing to debug from a report.
-    """
     @staticmethod
     def body_of(response: APIResponse) -> dict | list:
+        """
+        The response body as Python, with a readable failure when it isn't JSON.
+        Playwright's own .json() raises a bare decode error that names neither the
+        call that produced it nor what came back instead, which is a miserable
+        thing to debug from a report.
+        """
         try:
             return response.json()
         except ValueError:

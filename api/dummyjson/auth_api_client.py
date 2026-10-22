@@ -16,11 +16,11 @@ class AuthApiClient(BaseApiClient):
             "/auth/login", data={"username": username, "password": password}
         )
 
-    """
-    The profile of whoever the token belongs to. Called with no token at all to
-    prove the endpoint is actually protected, so the header is only sent when
-    there is one.
-    """
     def get_current_user(self, token: str | None = None) -> APIResponse:
+        """
+        The profile of whoever the token belongs to. Called with no token at all to
+        prove the endpoint is actually protected, so the header is only sent when
+        there is one.
+        """
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         return self.request.get("/auth/me", headers=headers)

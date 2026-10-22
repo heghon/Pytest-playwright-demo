@@ -45,6 +45,7 @@ on:
           - api
           - automation
           - scraping
+          - smoke
           - ui
 
       jira:
@@ -58,7 +59,8 @@ on:
 
   # LIVE — but only Dependabot's own pull requests get past the job conditions.
   # It is how a bump that cannot even be installed gets caught before merging,
-  # which is exactly how some breakage reached main once.
+  # which is exactly how some breakage reached main once, and, through the
+  # smoke job, a bump that installs fine and then breaks the suite anyway.
   pull_request:
 
   # Every push to main no matter where it comes from.
@@ -72,10 +74,14 @@ on:
   #   paths:
   #     - "stepdefs/**"
   #     - "pages/**"
+  #     - "api/**"
   #     - "features/**"
   #     - "utils/**"
+  #     - "assets/**"
+  #     - "conftest.py"
   #     - "requirements.txt"
   #     - "pytest.ini"
+  #     - ".python-version"
   #     - ".github/workflows/**"
 
   # A nightly run, to catch the sites under test changing under you rather than
@@ -222,6 +228,74 @@ jobs:
 
           print(f"Dropdown is in step with pytest.ini: all, {', '.join(declared)}")
           PY
+
+  # The dependencies job proves a bump installs; this one proves it still runs.
+  # A package can resolve perfectly and break the suite all the same, with the example of pytest 10
+  # that removes internals pytest-bdd still calls, and a dry-run install would never
+  # notice. Two checks, both blind to the network, so neither can fail because a
+  # public site was slow, and neither grows slower as the suite grows:
+  #
+  # - collecting the whole suite, which parses every feature file and matches
+  #   every step without running any of them, in well under a second;
+  # - running the @smoke scenarios, which walk the whole framework against a
+  #   stub server the test starts itself — see features/api/smoke.feature.
+  #
+  # No secrets and no browser download, which is what lets it run on a
+  # Dependabot pull request at all.
+  smoke:
+    name: Check the framework still runs with the bump
+    needs: dependencies
+    if: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Smoke · Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Smoke · Install Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      # Playwright's pip package ships its own driver, and the HTTP client the
+      # smoke scenarios use needs nothing more, so no `playwright install`.
+      - name: Smoke · Install the pinned Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Smoke · Collect every scenario in the suite
+        run: pytest --collect-only -q
+
+      - name: Smoke · Run the smoke scenarios
+        run: pytest -m smoke
+
+      # A green run only says the scenarios passed. Whether our pytest-html
+      # hooks still turned them into the report everyone reads is a separate
+      # question, and a bump to pytest-html is exactly what could break it
+      # without failing a single test.
+      #
+      # Each string is one only our hooks write, and none of them is in the
+      # stylesheet that --self-contained-html inlines into the same file so a
+      # bare class name like "step--passed" is, and would always be found:
+      # the feature name (the grouping), the class pair on a passed step (the
+      # step recording), and the wording of a report_note (the notes).
+      - name: Smoke · Check the report shows the scenarios, steps and notes
+        run: |
+          for EXPECTED in "Framework smoke check" "step step--passed" "Matches api/schemas/product.schema.json"; do
+            if ! grep -q "$EXPECTED" reports/index.html; then
+              echo "::error::reports/index.html has no '$EXPECTED' — the run passed, but the report hooks in stepdefs/conftest.py no longer render it."
+              exit 1
+            fi
+          done
+          echo "The report shows the feature, the step statuses and the notes."
+
+      - name: Smoke · Upload the report when something failed
+        if: ${{ failure() && hashFiles('reports/index.html') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-report
+          path: reports/
+          retention-days: 7
 
   # Setup, test and report stay in one job on purpose: every job gets its own
   # fresh runner, so splitting them would mean re-checking-out and

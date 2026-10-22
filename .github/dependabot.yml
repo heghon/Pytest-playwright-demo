@@ -9,7 +9,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Minor and patch bumps travel together in one weekly PR. A major bump is
+    # left out of the group on purpose, so it arrives in a PR of its own: that
+    # is where breaking changes happen, so that is a better way of handling things.
     groups:
       python-packages:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
