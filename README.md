@@ -211,9 +211,15 @@ that is where breaking changes live. On each of its pull requests the
 caught before it reaches `main`, and the quality checks run `python check.py`,
 so a bump that installs but breaks the framework is also caught too.
 
+On the 1st of every month, the *Monthly maintenance* workflow opens an issue
+saying whether the Python version or the dependencies need attention, and what
+to do. Close it once it's handled. To get one now: Actions → Monthly maintenance
+→ Run workflow.
+
 ## Updating Python
 
-Check current support status and end-of-life dates at
+The monthly maintenance issue tells you when this is due. Check current support
+status and end-of-life dates at
 [devguide.python.org/versions](https://devguide.python.org/versions/).
 This project uses [pyenv](https://github.com/pyenv/pyenv) to manage
 Python versions.

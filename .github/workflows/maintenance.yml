@@ -1,0 +1,64 @@
+name: Monthly maintenance
+
+# Opens an issue on the 1st of every month saying whether the Python version or
+# the dependencies need attention: see utils/maintenance.py for what it checks.
+# An issue rather than a notification of some other kind, because it stays
+# until it is dealt with, and closing it is the record that it was.
+#
+# Like any scheduled workflow, GitHub switches it off after 60 days without
+# activity in the repository, and says so by email. Re-enable it from
+# Actions → Monthly maintenance.
+on:
+  schedule:
+    - cron: "0 7 1 * *"   # 07:00 UTC on the 1st: 08:00 or 09:00 in Paris
+  # To get this month's check now: Actions → Monthly maintenance → Run workflow.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  remind:
+    name: Open this month's maintenance issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Remind · Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Remind · Install Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      # The lock pip-compile --upgrade would produce, for the issue to compare
+      # with requirements.txt. Nothing is committed: the issue only reports.
+      - name: Remind · Work out what an upgrade would change
+        run: |
+          pip install pip-tools
+          pip-compile --quiet --strip-extras --upgrade \
+            --output-file="$RUNNER_TEMP/upgraded.txt" requirements.in
+
+      - name: Remind · Write the issue
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: python -m utils.maintenance "$RUNNER_TEMP/upgraded.txt" "$OWNER" > "$RUNNER_TEMP/issue.md"
+
+      # One open reminder at a time: the new issue holds this month's state, so
+      # an older one still open is closed with a pointer to it.
+      - name: Remind · Open the issue and close last month's
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create maintenance --color FBCA04 \
+            --description "Monthly maintenance check" --force
+          OLD=$(gh issue list --label maintenance --state open --json number --jq '.[].number')
+          NEW=$(gh issue create --label maintenance \
+            --title "Monthly maintenance: $(date -u +'%B %Y')" \
+            --body-file "$RUNNER_TEMP/issue.md")
+          echo "Opened $NEW"
+          for NUMBER in $OLD; do
+            gh issue close "$NUMBER" --comment "Superseded by $NEW."
+          done
