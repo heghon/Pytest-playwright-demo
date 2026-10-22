@@ -1,4 +1,5 @@
-from pytest_bdd import scenarios, when, then, parsers
+from pytest_bdd import parsers, scenarios, then, when
+
 from stepdefs.api.conftest import body, record
 from stepdefs.conftest import report_note
 
@@ -78,7 +79,7 @@ def request_profile_with_bad_token(auth_api, api_call, token):
         api_call,
         auth_api.get_current_user(token),
         "GET",
-        f'Authorization: Bearer {token}',
+        f"Authorization: Bearer {token}",
     )
     if response.status != 401:
         report_note(

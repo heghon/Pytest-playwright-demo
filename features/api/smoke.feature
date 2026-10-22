@@ -3,8 +3,9 @@ Feature: Framework smoke check
   I want a few scenarios that walk through every part of the framework
   So that a dependency bump that breaks it is caught before it is merged
 
-  # Run by CI on every Dependabot pull request, and left out of every other run
-  # by the -m "not smoke" in pytest.ini. You can ask for it with: pytest -m smoke
+  # One of the gates python check.py runs, on every push and Dependabot pull
+  # request, and left out of every other run by the -m "not smoke" in pytest.ini.
+  # You can ask for it on its own with: pytest -m smoke
   #
   # The products come from a stub server the test starts itself, never from the
   # network so a fail is never due to something else than the framework. What it

@@ -1,0 +1,63 @@
+name: Quality checks
+
+# Every quality gate, on every push: python check.py, the same command you run
+# locally, so there is no second list of checks here to fall out of step with
+# it. It needs no secrets, no browser and no network, and takes about a minute,
+# most of it installing the dependencies. The full suite stays in tests.yml,
+# started by hand.
+on:
+  push:
+    # Dependabot's branches are checked through their pull request below, where
+    # they belong; a push trigger on them as well would run everything twice.
+    branches-ignore: ["dependabot/**"]
+    # A change that is only Markdown cannot break a gate.
+    paths-ignore: ["**/*.md"]
+
+  # Only Dependabot's pull requests get past the job condition. Its bumps are
+  # what most needs the check, and its branches are skipped by push above.
+  pull_request:
+
+  # To run it by hand from Actions → Quality checks → Run workflow.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push makes an older run's answer irrelevant, so it gives way.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Run every quality gate
+    if: ${{ github.event_name != 'pull_request' || github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check · Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Check · Install Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      # Playwright's pip package ships its own driver, and the HTTP client the
+      # smoke scenarios use needs nothing more, so no `playwright install`.
+      - name: Check · Install the pinned Python dependencies
+        run: pip install -r requirements.txt
+
+      # venv, lint, format, unit tests, collect, smoke: see check.py for what
+      # each gate checks. It stops at the first failure and prints its output.
+      - name: Check · Run python check.py
+        run: python check.py
+
+      - name: Check · Upload the check reports when a gate failed
+        if: ${{ failure() && hashFiles('check-reports/**') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: check-reports
+          path: check-reports/
+          retention-days: 7

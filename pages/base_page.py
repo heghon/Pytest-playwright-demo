@@ -1,4 +1,5 @@
-from playwright.sync_api import Page, Locator, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import Locator, Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
 class BasePage:
@@ -10,18 +11,26 @@ class BasePage:
     def __init__(self, page: Page):
         self.page = page
 
-    def wait_for_element(self, locator: Locator, timeout: int = 5, error_message: str | None = None) -> Locator:
+    def wait_for_element(
+        self, locator: Locator, timeout: int = 5, error_message: str | None = None
+    ) -> Locator:
         """
         Waits for a locator to become visible within `timeout` seconds.
         Raises a clear, custom error instead of Playwright's default timeout
         error, which can be harder to read at a glance.
         """
         try:
-            locator.wait_for(state="visible", timeout=timeout*1000)
+            locator.wait_for(state="visible", timeout=timeout * 1000)
             return locator
         except PlaywrightTimeoutError:
-            message = error_message or f"Element not visible after {timeout}s with locator: {locator}"
-            raise AssertionError(message)
+            message = (
+                error_message
+                or f"Element not visible after {timeout}s with locator: {locator}"
+            )
+            # from None: this replaces Playwright's error rather than adding to
+            # it, so the report shows the clear message without the original
+            # chained underneath.
+            raise AssertionError(message) from None
 
     def safe_fill(self, locator: Locator, text: str, retries: int = 3):
         """

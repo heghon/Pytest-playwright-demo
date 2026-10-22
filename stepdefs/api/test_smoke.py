@@ -3,7 +3,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
-from pytest_bdd import scenarios, given, when, then, parsers
+from pytest_bdd import given, parsers, scenarios, then, when
+
 from stepdefs.api.conftest import REQUEST_TIMEOUT_MS, body, record
 
 scenarios("api/smoke.feature")
@@ -40,7 +41,9 @@ def stub_server():
             if self.path.startswith(prefix) and product_id in catalog:
                 self._answer(200, catalog[product_id])
             else:
-                self._answer(404, {"message": f"Product with id '{product_id}' not found"})
+                self._answer(
+                    404, {"message": f"Product with id '{product_id}' not found"}
+                )
 
         def _answer(self, status, payload):
             data = json.dumps(payload).encode("utf-8")
@@ -84,7 +87,7 @@ def api_request_context(playwright, stub_server):
 def stub_serves(stub_server, datatable):
     header, *rows = datatable
     for row in rows:
-        fields = dict(zip(header, row))
+        fields = dict(zip(header, row, strict=True))
         stub_server.catalog[fields["id"]] = {
             **PRODUCT_DEFAULTS,
             "id": int(fields["id"]),

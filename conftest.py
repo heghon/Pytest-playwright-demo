@@ -1,5 +1,5 @@
 """
-Command-line options for the suite.
+Command-line options for the suite, and the check that runs before anything.
 
 This file exists only because of where pytest looks. Everything else lives in
 stepdefs/conftest.py, but pytest_addoption is read while the command line is
@@ -10,6 +10,23 @@ the flag it was supposed to add.
 What the option then *does* is in stepdefs/conftest.py, beside the tag handling
 it belongs to: see pytest_collection_modifyitems.
 """
+
+import pytest
+
+from utils import venv_check
+
+
+def pytest_configure(config):
+    """
+    Refuses to run on a venv that has drifted from requirements.txt.
+
+    Here rather than in stepdefs/conftest.py so it runs first, before a single
+    scenario is collected: a run on the wrong versions produces results that
+    look perfectly normal and mean something else.
+    """
+    problems = venv_check.check()
+    if problems:
+        raise pytest.UsageError(venv_check.message(problems))
 
 
 def pytest_addoption(parser):

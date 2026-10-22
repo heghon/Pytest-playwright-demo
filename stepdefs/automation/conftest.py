@@ -1,7 +1,10 @@
 import os
+
 import pytest
-from pages.saucedemo.login_page import LoginPage
+
 from pages.saucedemo.inventory_page import InventoryPage
+from pages.saucedemo.login_page import LoginPage
+
 
 @pytest.fixture
 def logged_in_inventory_page(page):

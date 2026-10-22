@@ -1,0 +1,24 @@
+# Ruff lints and formats the project; CI runs both checks in the dependencies job.
+#
+#     ruff check --fix .   # fix what can be fixed, report the rest
+#     ruff format .        # lay the code out the one agreed way
+#
+# venv/ and the other ignored folders are skipped through .gitignore.
+
+# The default. Wider lines made the formatter join lines that were wrapped on
+# purpose, which is the opposite of what it is here for.
+line-length = 88
+
+[lint]
+extend-select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "B",   # bugbear: likely bugs and design problems
+    "UP",  # pyupgrade: syntax the pinned Python has a better form for
+    "I",   # import sorting
+]
+ignore = [
+    # The formatter already wraps every line it can. What is left over is a long
+    # string or comment, where a break would only make it harder to read.
+    "E501",
+]

@@ -11,7 +11,7 @@
 /*------------------
  * 1. Failure artifacts
  *
- * Markup comes from tests/conftest.py via extras.html(). Layout lives here at
+ * Markup comes from stepdefs/conftest.py via extras.html(). Layout lives here at
  * the top level so it holds in both themes; only colours are restated below.
  *------------------*/
 /* Emptying the log in conftest.py removes the <div class="log">, but not the

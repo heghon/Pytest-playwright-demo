@@ -18,3 +18,4 @@ pytest-html
 pytest-metadata
 pytest-playwright
 python-dotenv
+ruff

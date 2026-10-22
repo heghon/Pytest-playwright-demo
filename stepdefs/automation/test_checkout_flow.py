@@ -1,4 +1,5 @@
-from pytest_bdd import scenarios, given, when, then, parsers
+from pytest_bdd import given, parsers, scenarios, then, when
+
 from pages.saucedemo.cart_page import CartPage
 from pages.saucedemo.checkout_page import CheckoutPage
 from stepdefs.conftest import report_note
@@ -8,7 +9,7 @@ scenarios("automation/checkout.feature")
 
 @given("I am logged in to SauceDemo", target_fixture="inventory_page")
 def logged_in(logged_in_inventory_page):
-    report_note("I am correctly looged in")
+    report_note("I am correctly logged in")
     return logged_in_inventory_page
 
 
@@ -57,6 +58,7 @@ def check_overview_items(checkout_page, datatable):
 def finish_and_confirm(checkout_page):
     finish_order(checkout_page)
     check_confirmation(checkout_page)
+
 
 @when("I finish my order")
 def finish_order(checkout_page):

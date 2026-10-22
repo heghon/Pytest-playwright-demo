@@ -1,6 +1,7 @@
 from pages.base_page import BasePage
 from utils.errors import NoDataScrapedError
 
+
 class BooksPage(BasePage):
     URL = "https://books.toscrape.com/"
 

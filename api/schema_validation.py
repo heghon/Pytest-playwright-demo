@@ -1,5 +1,5 @@
 import json
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -7,7 +7,7 @@ from jsonschema import Draft202012Validator
 SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
 
 
-@lru_cache(maxsize=None)
+@cache
 def load_schema(name: str) -> dict:
     """
     Reads schemas/<name>.schema.json, once per name per session.
@@ -18,7 +18,10 @@ def load_schema(name: str) -> dict:
     """
     path = SCHEMA_DIR / f"{name}.schema.json"
     if not path.is_file():
-        available = sorted(p.name.removesuffix(".schema.json") for p in SCHEMA_DIR.glob("*.schema.json"))
+        available = sorted(
+            p.name.removesuffix(".schema.json")
+            for p in SCHEMA_DIR.glob("*.schema.json")
+        )
         raise AssertionError(
             f"There is no '{name}' schema in {SCHEMA_DIR.name}/. "
             f"Available: {', '.join(available) or 'none'}."

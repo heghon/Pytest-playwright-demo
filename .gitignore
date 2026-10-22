@@ -23,3 +23,5 @@ scraped_books.csv
 reports/
 test-results/
 playwright-report/
+# What the quality check (python check.py) writes, kept away from reports/.
+check-reports/

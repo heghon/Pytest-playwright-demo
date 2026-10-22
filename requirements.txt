@@ -75,6 +75,8 @@ rpds-py==2026.6.3
     # via
     #   jsonschema
     #   referencing
+ruff==0.17.1
+    # via -r requirements.in
 six==1.17.0
     # via parse-type
 text-unidecode==1.3

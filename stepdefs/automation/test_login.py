@@ -1,5 +1,7 @@
 import os
-from pytest_bdd import scenarios, given, when, then, parsers
+
+from pytest_bdd import given, parsers, scenarios, then, when
+
 from pages.saucedemo.login_page import LoginPage
 
 scenarios("automation/login.feature")

@@ -1,7 +1,9 @@
 import json
 import os
+
 import pytest
-from pytest_bdd import then, parsers
+from pytest_bdd import parsers, then
+
 from api.base_api_client import BaseApiClient
 from api.dummyjson.auth_api_client import AuthApiClient
 from api.dummyjson.products_api_client import ProductsApiClient
@@ -37,7 +39,7 @@ def _artifacts_dir():
     normally points at are screenshots, videos and traces, none of which exist
     without a page.
     """
-    return None
+    return
 
 
 @pytest.fixture

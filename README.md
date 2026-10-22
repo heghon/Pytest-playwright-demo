@@ -86,7 +86,7 @@ pytest -m smoke        # the framework self-check, no browser and no network
 ```
 
 The smoke scenarios are left out of every other run, including a plain `pytest`,
-so they never show up in the published report. CI runs them on Dependabot's pull requests only.
+so they never show up in the published report. `python check.py` runs them, see below.
 
 Run everything tagged with one issue:
 ```bash
@@ -141,6 +141,30 @@ Every run writes `reports/`, a self-contained folder: `index.html` plus the fail
 
 CI publishes the latest run to **[the live report](https://heghon.github.io/Pytest-playwright-demo/)**, where each failure also gets a one-click link into the [Playwright trace viewer](https://trace.playwright.dev/) — no download, no terminal. The same bundle is attached to every run as the `playwright-report` artifact if you'd rather read it offline.
 
+## Checking the code
+
+Every quality gate, in one command, with no browser and no network:
+
+```bash
+python check.py
+```
+
+It checks, in order: that the venv matches `requirements.txt`, lint, formatting,
+the framework's unit tests, that every scenario is collected, and the smoke
+scenarios with their report. It stops at the first gate that fails and shows why.
+Its reports go to `check-reports/`, never over `reports/`. CI runs the same
+command on every push and on Dependabot's pull requests.
+
+To fix what the lint and format gates report:
+
+```bash
+ruff check --fix .    # fixes whatever can be fixed automatically
+ruff format .         # formats every file the one agreed way
+```
+
+Every `pytest` run also checks the venv first, and refuses to start on one that
+has drifted from `requirements.txt`, giving the commands that fix it.
+
 ## Updating dependencies
 
 Two files, and only one of them is written by hand:
@@ -164,6 +188,16 @@ To pull in newer versions of everything, add `--upgrade`:
 pip-compile --strip-extras --upgrade requirements.in
 ```
 
+Whenever `requirements.txt` changes, yours or from a merged Dependabot PR, bring
+the venv in line with it. `pip install -r` would add and upgrade, but it never
+removes what the lock dropped, and until you run something, local runs keep using
+the old versions:
+
+```bash
+pip-sync requirements.txt
+playwright install
+```
+
 **Never rebuild `requirements.txt` with `pip freeze`.** A freeze lists direct and
 transitive packages alike with no record of which is which, so Dependabot reads
 every line as a deliberate choice and will happily bump a package like `pyee`
@@ -172,11 +206,10 @@ at all. The `# via` annotations are what keep that from happening.
 
 Dependabot opens a weekly PR for pip and for the Actions. Minor and patch
 updates arrive grouped in one PR; a major version gets a PR of its own, since
-that is where breaking changes live. Its pull requests are the one case CI reacts
-to automatically: the `dependencies` job resolves the lock on the PR, so a bump
-that cannot be installed is caught before it reaches `main`, and the `smoke` job
-then collects the whole suite and runs `pytest -m smoke`, so a bump that installs
-but breaks the framework is caught too.
+that is where breaking changes live. On each of its pull requests the
+`dependencies` job resolves the lock, so a bump that cannot be installed is
+caught before it reaches `main`, and the quality checks run `python check.py`,
+so a bump that installs but breaks the framework is also caught too.
 
 ## Updating Python
 

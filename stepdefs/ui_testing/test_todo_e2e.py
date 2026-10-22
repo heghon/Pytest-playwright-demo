@@ -1,5 +1,6 @@
 import pytest
-from pytest_bdd import scenarios, given, when, then
+from pytest_bdd import given, scenarios, then, when
+
 from pages.todomvc.todo_page import TodoPage
 
 scenarios("ui_testing/todo.feature")

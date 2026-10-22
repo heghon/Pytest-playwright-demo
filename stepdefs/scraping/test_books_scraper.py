@@ -1,7 +1,9 @@
 import csv
 from pathlib import Path
+
 import pytest
-from pytest_bdd import scenarios, given, when, then, parsers
+from pytest_bdd import given, parsers, scenarios, then, when
+
 from pages.books_toscrape.books_page import BooksPage
 
 scenarios("scraping/books_scraping.feature")

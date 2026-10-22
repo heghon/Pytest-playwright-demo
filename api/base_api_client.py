@@ -27,4 +27,4 @@ class BaseApiClient:
                 f"Expected JSON from {response.url}, got "
                 f"{response.headers.get('content-type', 'no content-type')}:\n"
                 f"{response.text()[:300]}"
-            )
+            ) from None

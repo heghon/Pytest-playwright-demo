@@ -1,7 +1,8 @@
-from pytest_bdd import scenarios, when, then, parsers
+from pytest_bdd import parsers, scenarios, then, when
+
+from api.schema_validation import assert_matches_schema
 from stepdefs.api.conftest import body, latest, record
 from stepdefs.conftest import report_note
-from api.schema_validation import assert_matches_schema
 
 scenarios("api/products.feature")
 
@@ -51,7 +52,9 @@ def check_every_product(api_call, schema):
     products = body(api_call)["products"]
     assert products, f"{latest(api_call).url} returned an empty page of products."
     for product in products:
-        described = f"product {product.get('id', '?')} ({product.get('title', 'untitled')})"
+        described = (
+            f"product {product.get('id', '?')} ({product.get('title', 'untitled')})"
+        )
         assert_matches_schema(product, schema, described)
 
     ids = [product.get("id") for product in products]

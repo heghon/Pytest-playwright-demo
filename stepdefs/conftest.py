@@ -1,12 +1,13 @@
 import os
+import re
 from html import escape
 from pathlib import Path
 from urllib.parse import quote, urlencode
+
 import pytest
 from dotenv import load_dotenv
 from pytest_html import extras
 from pytest_metadata.plugin import metadata_key
-import re
 
 load_dotenv()
 
@@ -32,6 +33,7 @@ def pytest_configure(config):
     for key, value in list(metadata.items()):
         if value is None or (isinstance(value, str) and not value.strip()):
             del metadata[key]
+
 
 # Where pytest-playwright will drop this test's artifacts, and whether the test
 # body failed. Both are recorded while the test is still alive, because
@@ -339,6 +341,7 @@ def _media_src(media: Path, report_dir: Path) -> str | None:
         return None
     return quote(location.as_posix())
 
+
 # Inline handler for the "Copy" button next to the trace command.
 # It has to be an onclick attribute: pytest-html injects HTML extras with
 # insertAdjacentHTML, which runs inline handlers but never executes <script>
@@ -386,7 +389,9 @@ _OPEN_IMG_JS = (
 # an inline handler but never runs a <script>. The class goes on the <li>, so the
 # caret and the notes can both react to it in CSS alone. Single quotes only —
 # this string ends up inside an HTML attribute.
-_TOGGLE_NOTES_JS = "(function(h){h.parentElement.classList.toggle('is-collapsed');})(this)"
+_TOGGLE_NOTES_JS = (
+    "(function(h){h.parentElement.classList.toggle('is-collapsed');})(this)"
+)
 
 
 def _step_table(table):
@@ -436,7 +441,7 @@ def _steps_extra(data: dict):
             )
             toggle = (
                 f'<span class="step__toggle">{count} '
-                f'note{"s" if count > 1 else ""}</span>'
+                f"note{'s' if count > 1 else ''}</span>"
             )
         else:
             head = '<div class="step__head">'
@@ -478,7 +483,9 @@ def _unreachable_extra(media: Path, report_dir: Path, kind: str, css: str):
     )
 
 
-def _screenshot_extra(screenshot: Path, report_dir: Path, name: str = "Screenshot on failure"):
+def _screenshot_extra(
+    screenshot: Path, report_dir: Path, name: str = "Screenshot on failure"
+):
     """
     Renders the screenshot ourselves rather than via extras.image(), so a plain
     click can open it in a new tab — see _OPEN_IMG_JS. This also leaves
@@ -644,7 +651,9 @@ def _insert_after_test(cells, cell):
     and the engine is a detail of the run rather than of the test.
     """
     for index, existing in enumerate(cells):
-        if "col-testId" in str(existing) or 'data-column-type="testId"' in str(existing):
+        if "col-testId" in str(existing) or 'data-column-type="testId"' in str(
+            existing
+        ):
             cells.insert(index + 1, cell)
             return
     cells.append(cell)
@@ -687,9 +696,7 @@ def pytest_html_results_table_header(cells):
     _insert_after_test(
         cells, '<th class="sortable" data-column-type="engine">Engine</th>'
     )
-    _insert_after_test(
-        cells, '<th class="sortable" data-column-type="jira">Jira</th>'
-    )
+    _insert_after_test(cells, '<th class="sortable" data-column-type="jira">Jira</th>')
 
 
 def _grouping_of(item, data):
@@ -744,7 +751,7 @@ def _rewrite_test_cell(report, cells):
 
 
 def _cell_text(cell: str) -> str:
-    match = re.search(r"<td[^>]*>(.*)</td>", cell, re.S)
+    match = re.search(r"<td[^>]*>(.*)</td>", cell, re.DOTALL)
     return match.group(1) if match else cell
 
 
@@ -752,7 +759,9 @@ def pytest_html_results_table_row(report, cells):
     _drop_links_column(cells)
     _rewrite_test_cell(report, cells)
     engine = getattr(report, "engine", "")
-    engine_class = "col-engine col-engine--none" if engine == NO_BROWSER else "col-engine"
+    engine_class = (
+        "col-engine col-engine--none" if engine == NO_BROWSER else "col-engine"
+    )
     _insert_after_test(cells, f'<td class="{engine_class}">{escape(engine)}</td>')
     _insert_after_test(cells, _jira_cell(getattr(report, "jira_keys", [])))
 
@@ -984,7 +993,11 @@ def pytest_runtest_makereport(item, call):
             artifacts.append(_steps_extra(data))
 
         folder = item.stash.get(ARTIFACTS_DIR, None)
-        if item.stash.get(TEST_FAILED, False) and folder is not None and folder.is_dir():
+        if (
+            item.stash.get(TEST_FAILED, False)
+            and folder is not None
+            and folder.is_dir()
+        ):
             for screenshot in sorted(folder.glob("test-failed-*.png")):
                 artifacts.append(_screenshot_extra(screenshot, report_dir))
             for video in sorted(folder.glob("video*.webm")):
