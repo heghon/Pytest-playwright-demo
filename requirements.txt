@@ -8,16 +8,10 @@ attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
-certifi==2026.7.22
-    # via requests
-charset-normalizer==3.5.1
-    # via requests
 gherkin-official==29.0.0
     # via pytest-bdd
 greenlet==3.5.6
     # via playwright
-idna==3.19
-    # via requests
 iniconfig==2.3.0
     # via pytest
 jinja2==3.1.6
@@ -42,7 +36,7 @@ parse==1.22.1
     #   pytest-bdd
 parse-type==0.6.6
     # via pytest-bdd
-playwright==1.62.0
+playwright==1.63.0
     # via
     #   -r requirements.in
     #   pytest-playwright
@@ -55,14 +49,11 @@ pygments==2.21.0
 pytest==9.1.1
     # via
     #   -r requirements.in
-    #   pytest-base-url
     #   pytest-bdd
     #   pytest-html
     #   pytest-metadata
     #   pytest-playwright
-pytest-base-url==2.1.0
-    # via pytest-playwright
-pytest-bdd==8.1.0
+pytest-bdd==9.0.0
     # via -r requirements.in
 pytest-html==4.2.0
     # via -r requirements.in
@@ -70,9 +61,9 @@ pytest-metadata==3.1.1
     # via
     #   -r requirements.in
     #   pytest-html
-pytest-playwright==0.9.0
+pytest-playwright==0.10.0
     # via -r requirements.in
-python-dotenv==1.2.3
+python-dotenv==1.2.4
     # via -r requirements.in
 python-slugify==8.0.4
     # via pytest-playwright
@@ -80,8 +71,6 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.34.2
-    # via pytest-base-url
 rpds-py==2026.6.3
     # via
     #   jsonschema
@@ -94,5 +83,3 @@ typing-extensions==4.16.0
     # via
     #   pyee
     #   pytest-bdd
-urllib3==2.7.0
-    # via requests
