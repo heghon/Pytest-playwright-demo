@@ -21,8 +21,10 @@ The colours, per page:
     red     at least one critical or serious violation
     orange  only moderate or minor ones
     green   checked, and nothing found
-    grey    nothing to check: a scenario that never opened a page, or a page
-            the check could not run on
+    grey    a page the check could not run on
+
+A scenario that never opens a page, like the API ones, simply has nothing in
+the section.
 """
 
 from dataclasses import dataclass, field
@@ -102,8 +104,6 @@ class Results:
     enabled: bool = False
     axe_version: str = ""
     pages: dict[tuple[str, str], PageResult] = field(default_factory=dict)
-    # Scenarios that never had a page checked: the API ones, mostly.
-    unchecked: list[str] = field(default_factory=list)
 
     def page(self, url: str, engine: str, scenario: str) -> PageResult:
         result = self.pages.setdefault((url, engine), PageResult(url, engine))
@@ -176,13 +176,11 @@ def check(page, scenario: str, engine: str) -> None:
 
 def start_scenario(name: str, engine: str) -> None:
     global _current
-    _current = {"name": name, "engine": engine, "checked": False}
+    _current = {"name": name, "engine": engine}
 
 
 def end_scenario() -> None:
     global _current
-    if _current is not None and not _current["checked"]:
-        RESULTS.unchecked.append(_current["name"])
     _current = None
 
 
@@ -198,7 +196,6 @@ def check_new_pages(node) -> None:
             continue
         checked_at[page] = page.url
         check(page, _current["name"], _current["engine"])
-        _current["checked"] = True
 
 
 def accessibility_note(page) -> None:
@@ -226,7 +223,6 @@ def accessibility_note(page) -> None:
             "there is no scenario running to file this check under."
         )
     check(page, _current["name"], _current["engine"])
-    _current["checked"] = True
 
 
 # --- the report section ------------------------------------------------------
@@ -235,7 +231,7 @@ _LABELS = {
     "red": "critical or serious issues",
     "orange": "moderate or minor issues only",
     "green": "nothing found",
-    "grey": "nothing to check",
+    "grey": "could not be checked",
 }
 
 # Folds the section's entries along with pytest-html's own "Show all details"
@@ -272,7 +268,7 @@ def _plural(count: int, word: str) -> str:
 
 
 HTML_PREVIEW_CHARS = 160
-ELEMENTS_SHOWN = 3
+ELEMENTS_SHOWN = 10
 
 
 def _one_line(html: str) -> str:
@@ -300,17 +296,17 @@ def _rule_html(violation: Violation) -> str:
         else ""
     )
     return (
-        f'<details class="a11y__rule">'
-        f"<summary>"
+        f'<div class="a11y__rule">'
+        f'<div class="a11y__rule-head">'
         f'<span class="a11y__impact a11y__impact--{escape(violation.impact)}">'
         f"{escape(violation.impact)}</span> "
         f'<span class="a11y__rule-id">{escape(violation.rule)}</span> '
         f"{escape(violation.help)} "
         f'<span class="a11y__count">{_plural(len(violation.elements), "element")}</span>'
         f"{link}"
-        f"</summary>"
+        f"</div>"
         f'<ul class="a11y__elements">{elements}</ul>'
-        f"</details>"
+        f"</div>"
     )
 
 
@@ -362,19 +358,6 @@ def section_html(results: Results) -> str:
     for result in pages:
         counts[result.colour()] += 1
 
-    unchecked = ""
-    if results.unchecked:
-        names = "".join(f"<li>{escape(name)}</li>" for name in results.unchecked)
-        unchecked = (
-            f'<details class="a11y__page a11y--grey">'
-            f'<summary><span class="a11y__dot" title="{_LABELS["grey"]}"></span>'
-            f'<span class="a11y__url">No page to check</span>'
-            f'<span class="a11y__count">'
-            f"{_plural(len(results.unchecked), 'scenario')}</span></summary>"
-            f'<ul class="a11y__unchecked">{names}</ul>'
-            f"</details>"
-        )
-
     engine = (
         f"axe-core {escape(results.axe_version)}" if results.axe_version else "axe-core"
     )
@@ -384,9 +367,9 @@ def section_html(results: Results) -> str:
         for colour, label in _LABELS.items()
         if colour != "grey"
     )
-    body = "".join(_page_html(result) for result in pages) + unchecked
+    body = "".join(_page_html(result) for result in pages)
     if not body:
-        body = '<p class="a11y__empty">No scenario ran.</p>'
+        body = '<p class="a11y__summary">No scenario in this run opened a page.</p>'
 
     return (
         f'<template id="a11y-template"><section id="a11y" class="a11y">'

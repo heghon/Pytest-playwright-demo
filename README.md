@@ -116,7 +116,7 @@ pytest --accessibility
 
 The findings go to an **Accessibility** section at the bottom of the report, one
 entry per page, coloured red (critical or serious issues), orange (moderate or
-minor only), green (nothing found) or grey (nothing to check). They never fail a
+minor only), green (nothing found) or grey (the page couldn't be checked). They never fail a
 test. 
 On CI it's the *accessibility* checkbox of the manual run, unticked by default.
 

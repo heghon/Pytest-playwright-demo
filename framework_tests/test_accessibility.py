@@ -119,11 +119,12 @@ def fresh(monkeypatch):
     return results
 
 
-def test_unchecked(fresh):
-    """A scenario that never had a page checked is listed as such."""
+def test_scenario_no_page(fresh):
+    """A scenario that never opens a page leaves nothing in the results."""
     accessibility.start_scenario("An API scenario", "no browser")
     accessibility.end_scenario()
-    assert fresh.unchecked == ["An API scenario"]
+    assert fresh.pages == {}
+    assert accessibility._current is None
 
 
 def test_note_off(monkeypatch):
@@ -177,12 +178,11 @@ def test_section_capped():
     assert "…and 4 more" in html
 
 
-def test_section_unchecked():
-    """Scenarios with nothing to check get one grey entry listing them."""
-    results = Results(enabled=True, unchecked=["API one", "API two"])
-    html = section_html(results)
-    assert "No page to check" in html
-    assert "<li>API one</li><li>API two</li>" in html
+def test_section_no_page():
+    """A run where no scenario opened a page says so, with no entry at all."""
+    html = section_html(Results(enabled=True))
+    assert "No scenario in this run opened a page." in html
+    assert "a11y__page" not in html
 
 
 def test_one_line():
