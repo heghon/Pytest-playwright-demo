@@ -8,6 +8,8 @@ attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
+axe-playwright-python==0.1.8
+    # via -r requirements.in
 gherkin-official==42.0.1
     # via pytest-bdd
 greenlet==3.5.6
@@ -39,6 +41,7 @@ parse-type==0.6.6
 playwright==1.64.0
     # via
     #   -r requirements.in
+    #   axe-playwright-python
     #   pytest-playwright
 pluggy==1.7.0
     # via pytest

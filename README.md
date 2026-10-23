@@ -105,6 +105,21 @@ pytest stepdefs/ui_testing/test_todo_e2e.py
 
 Add `--headed` to any command above to watch the browser instead of running headless.
 
+### Checking accessibility
+
+Add `--accessibility` to any run command to check every page the scenarios visit with
+[axe-core](https://github.com/dequelabs/axe-core):
+
+```bash
+pytest --accessibility
+```
+
+The findings go to an **Accessibility** section at the bottom of the report, one
+entry per page, coloured red (critical or serious issues), orange (moderate or
+minor only), green (nothing found) or grey (nothing to check). They never fail a
+test. 
+On CI it's the *accessibility* checkbox of the manual run, unticked by default.
+
 ### Choosing a browser
 
 Runs use Chromium unless you say otherwise:

@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 from pytest_html import extras
 from pytest_metadata.plugin import metadata_key
 
+from stepdefs import accessibility
+
 load_dotenv()
 
 JIRA_TAG_RE = re.compile(r"^JIRA-\d+$")
@@ -27,6 +29,9 @@ def pytest_configure(config):
     trylast so the plugins filling the metadata have had their turn; pytest-html
     only snapshots the table at session start, so this still lands in time.
     """
+    # Read once here, so the hooks below only ask the results whether to act.
+    accessibility.RESULTS.enabled = config.getoption("--accessibility", False)
+
     metadata = config.stash.get(metadata_key, None)
     if metadata is None:
         return
@@ -101,6 +106,26 @@ def _artifacts_dir(request, output_path, browser_name):
     every run quietly went to chromium.
     """
     request.node.stash[ARTIFACTS_DIR] = Path(output_path)
+
+
+@pytest.fixture
+def context(context, request):
+    """
+    pytest-playwright's browser context, with every page it opens tracked for
+    the accessibility check when --accessibility is on —> see
+    stepdefs/accessibility.py. Off, it is the context untouched.
+
+    Tracked here rather than through the page fixture because a scenario can
+    open more than one page, and a popup never goes through that fixture.
+    """
+    if accessibility.RESULTS.enabled:
+        pages = request.node.stash.setdefault(accessibility.TRACKED_PAGES, [])
+
+        def track(page):
+            pages.append(page)
+
+        context.on("page", track)
+    return context
 
 
 def pytest_bdd_apply_tag(tag, function):
@@ -240,6 +265,13 @@ def pytest_bdd_before_scenario(request, feature, scenario):
             for step in scenario.steps
         ],
     }
+    if accessibility.RESULTS.enabled:
+        accessibility.start_scenario(scenario.name, _engine_of(request.node))
+
+
+def pytest_bdd_after_scenario(request, feature, scenario):
+    if accessibility.RESULTS.enabled:
+        accessibility.end_scenario()
 
 
 def pytest_bdd_before_step(request, feature, scenario, step, step_func):
@@ -265,6 +297,10 @@ def pytest_bdd_after_step(request, feature, scenario, step, step_func, step_func
         data["current"]["status"] = "passed"
         data["current"] = None
     _current_step = None
+    # After the step, not on navigation: the step has waited for the page it
+    # expected, so the check sees it drawn —> see stepdefs/accessibility.py.
+    if accessibility.RESULTS.enabled:
+        accessibility.check_new_pages(request.node)
 
 
 def pytest_bdd_step_error(
@@ -276,6 +312,10 @@ def pytest_bdd_step_error(
         data["current"]["status"] = "failed"
         data["current"] = None
     _current_step = None
+    # The page a scenario fails on was still visited, and is checked like any
+    # other: a finding never fails a test, but this one has failed already.
+    if accessibility.RESULTS.enabled:
+        accessibility.check_new_pages(request.node)
 
 
 # Screenshots and videos are linked, never inlined as base64.
@@ -958,6 +998,10 @@ _GROUPING_JS = """
 
 def pytest_html_results_summary(postfix):
     postfix.append(_GROUPING_JS)
+    # Empty without --accessibility. pytest-html calls this every time it
+    # rewrites the report during the run, so the section is always as complete
+    # as the run so far.
+    postfix.append(accessibility.section_html(accessibility.RESULTS))
 
 
 @pytest.hookimpl(hookwrapper=True)

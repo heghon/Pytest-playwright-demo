@@ -57,6 +57,14 @@ on:
         type: string
         default: ""
 
+      accessibility:
+        description: "Check every page visited for accessibility (axe-core), in its own report section"
+        # Off unless asked for: it adds a few seconds per page, and its findings
+        # are an audit to read rather than a verdict, so they never fail the run.
+        # A full run from main with it ticked still publishes, section included.
+        type: boolean
+        default: false
+
   # LIVE — but only Dependabot's own pull requests get past the job conditions.
   # It is how a bump that cannot even be installed gets caught before merging,
   # which is exactly how some breakage reached main once. A bump that installs
@@ -327,6 +335,8 @@ jobs:
         env:
           MARKER: ${{ inputs.marker || 'all' }}
           JIRA: ${{ inputs.jira }}
+          # "true" when ticked; empty on any trigger other than a manual run.
+          ACCESSIBILITY: ${{ inputs.accessibility }}
         run: |
           # Built as an array rather than a string of flags: "-m api" has to
           # reach pytest as two arguments, and a quoted string would arrive as
@@ -345,6 +355,9 @@ jobs:
             ARGS+=(--jira "$JIRA")
           elif [ "$MARKER" != "all" ]; then
             ARGS+=(-m "$MARKER")
+          fi
+          if [ "$ACCESSIBILITY" = "true" ]; then
+            ARGS+=(--accessibility)
           fi
           echo "Running: pytest ${ARGS[*]}"
           pytest "${ARGS[@]}"

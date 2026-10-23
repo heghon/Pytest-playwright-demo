@@ -39,3 +39,13 @@ def pytest_addoption(parser):
             "The JIRA- prefix is optional: --jira 105 means the same thing."
         ),
     )
+    parser.addoption(
+        "--accessibility",
+        action="store_true",
+        default=False,
+        help=(
+            "Check every page the scenarios visit with axe-core, and list the "
+            "violations in an Accessibility section at the bottom of the report. "
+            "Findings never fail a test."
+        ),
+    )

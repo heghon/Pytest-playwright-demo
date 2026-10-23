@@ -10,6 +10,7 @@
 #     pip install pip-tools
 #     pip-compile --strip-extras requirements.in
 
+axe-playwright-python
 jsonschema
 playwright
 pytest

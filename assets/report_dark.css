@@ -272,6 +272,156 @@
 }
 
 /*------------------
+ * Accessibility section
+ *
+ * Only rendered with --accessibility: one foldable entry per page checked,
+ * built by stepdefs/accessibility.py and placed after the results table. The
+ * colour sits on the entry and shows as a dot and a left border, the same
+ * language as the step statuses above.
+ *------------------*/
+.a11y {
+  margin-top: 32px;
+}
+
+.a11y__summary {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #555;
+}
+
+.a11y__legend {
+  white-space: nowrap;
+}
+
+.a11y__page {
+  margin: 6px 0;
+  border: 1px solid #e0e0e0;
+  border-left: 4px solid #d8d8d8;
+  border-radius: 3px;
+}
+
+.a11y__page > summary {
+  padding: 7px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  background-color: #f7f9fb;
+}
+
+.a11y__page[open] > summary {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.a11y__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: baseline;
+  background-color: #b0b0b0;
+}
+
+.a11y--red { border-left-color: #c9372c; }
+.a11y--red .a11y__dot { background-color: #c9372c; }
+.a11y--orange { border-left-color: #e08a00; }
+.a11y--orange .a11y__dot { background-color: #e08a00; }
+.a11y--green { border-left-color: #35a35f; }
+.a11y--green .a11y__dot { background-color: #35a35f; }
+.a11y--grey { border-left-color: #b0b0b0; }
+
+.a11y__url {
+  font-weight: bold;
+  word-break: break-all;
+}
+
+.a11y__engine,
+.a11y__count {
+  margin-left: 10px;
+  font-size: 12px;
+  color: #777;
+}
+
+.a11y__scenarios,
+.a11y__error,
+.a11y__unchecked {
+  margin: 8px 12px;
+  font-size: 12px;
+  color: #555;
+}
+
+.a11y__error {
+  color: #8a6d1f;
+}
+
+.a11y__rule {
+  margin: 4px 12px 8px;
+}
+
+.a11y__rule > summary {
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.a11y__rule a {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #14539a;
+}
+
+.a11y__impact {
+  display: inline-block;
+  min-width: 62px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: bold;
+  text-align: center;
+  color: #fff;
+}
+
+.a11y__impact--critical { background-color: #a3251c; }
+.a11y__impact--serious { background-color: #c9372c; }
+.a11y__impact--moderate { background-color: #e08a00; }
+.a11y__impact--minor { background-color: #b98a2e; }
+
+.a11y__rule-id {
+  font-family: monospace;
+}
+
+.a11y__elements {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.a11y__elements li {
+  margin: 3px 0;
+}
+
+/* The selector to find the element, then its markup as the page had it. */
+.a11y__target {
+  display: block;
+  font-weight: bold;
+}
+
+/* Already cut to one line by the renderer; this only stops a long one from
+   widening the page. */
+.a11y__html {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #666;
+}
+
+.a11y__more {
+  list-style: none;
+  font-style: italic;
+  color: #777;
+}
+
+/*------------------
  * 2. Dark theme
  *
  * Every rule below restates a selector from pytest-html's style.css that
@@ -479,5 +629,50 @@
 
   .artifact__copy:hover {
     background-color: #383c43;
+  }
+
+  .a11y__summary,
+  .a11y__scenarios,
+  .a11y__unchecked {
+    color: #a8adb5;
+  }
+
+  .a11y__page {
+    border-color: #3a3d42;
+  }
+
+  .a11y__page > summary {
+    background-color: #24262b;
+    color: #cfd3d9;
+  }
+
+  .a11y__page[open] > summary {
+    border-bottom-color: #3a3d42;
+  }
+
+  .a11y--red { border-left-color: #e05a4f; }
+  .a11y--red .a11y__dot { background-color: #e05a4f; }
+  .a11y--orange { border-left-color: #f0a030; }
+  .a11y--orange .a11y__dot { background-color: #f0a030; }
+  .a11y--green { border-left-color: #3fa96a; }
+  .a11y--green .a11y__dot { background-color: #3fa96a; }
+  .a11y--grey { border-left-color: #5a5e66; }
+  .a11y__dot { background-color: #5a5e66; }
+
+  .a11y__engine,
+  .a11y__count {
+    color: #8b9099;
+  }
+
+  .a11y__error {
+    color: #d9b774;
+  }
+
+  .a11y__rule a {
+    color: #8ab8e8;
+  }
+
+  .a11y__html {
+    color: #8b9099;
   }
 }
