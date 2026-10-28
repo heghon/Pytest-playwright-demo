@@ -150,6 +150,25 @@ The other triggers (on push, nightly, and a few
 more) are written out and commented at the top of
 [`.github/workflows/tests.yml`](.github/workflows/tests.yml), ready to switch on.
 
+### Running in Docker
+
+Instead of a venv, the suite can run in a container that already holds the
+pinned Python, the dependencies and chosen browsers. All it needs is
+[Docker Desktop](https://www.docker.com/products/docker-desktop/), running:
+
+```bash
+docker compose build                                 # once, and after any change to requirements.txt
+docker compose run --rm test                        # the suite, like a plain `pytest`
+docker compose run --rm test pytest -m api          # any pytest command works
+docker compose run --rm test python check.py        # the quality gates
+```
+
+Your code is shared with the container rather than copied into it, so edits are
+picked up without rebuilding, and the report lands in `reports/` as usual.
+`.env` is read from the project folder, never stored in the image. 
+
+`--headed` doesn't work in a container, since there is no screen to show the browser on.
+
 ## Test report
 
 Every run writes `reports/`, a self-contained folder: `index.html` plus the failure artifacts under `test-artifacts/`. Results are filed under the category folder and then the feature they came from, both foldable, so the table stays readable as the suite grows. A failing scenario carries its own evidence inline — a screenshot, the video of the run, and a copyable `playwright show-trace` command, which resolves from `reports/` itself. Delete the folder and the run leaves no trace behind.
@@ -244,6 +263,9 @@ Python versions.
    pyenv install [NEW-VERSION]
    echo "[NEW-VERSION]" > .python-version
 ```
+   Then put the same version on the `ARG PYTHON_VERSION=` line at the top of the
+   `Dockerfile`. A build can't read `.python-version`, and `python check.py`
+   fails until the two agree. Rebuild the image afterwards with `docker compose build`.
 
 2. **Open a brand-new terminal window before continuing.** pyenv only
    takes effect in shells started *after* it's been configured — reusing

@@ -1,0 +1,30 @@
+# Runs the suite in the image the Dockerfile describes, on the code as it is on
+# disk right now:
+#
+#     docker compose run --rm test                        # pytest, as configured
+#     docker compose run --rm test pytest -m api          # any pytest command
+#     docker compose run --rm test python check.py        # the quality gates
+#
+# --rm throws the container away afterwards; the reports stay, in reports/ on
+# your side, since the project folder is shared rather than copied.
+services:
+  test:
+    build: .
+    image: pytest-playwright-demo
+    # The project is mounted at the same path it has on the host, not at /app.
+    # The report writes absolute paths for a local run — the copyable
+    # `playwright show-trace` command is one — and a path that only exists
+    # inside the container would be useless once the run is over. ${PWD} is set
+    # by the shell compose is started from; /app is the fallback where it isn't.
+    working_dir: ${PWD:-/app}
+    volumes:
+      - .:${PWD:-/app}
+    # .env is in the mounted folder, so load_dotenv() finds it as it does
+    # locally. It is never copied into the image.
+    #
+    # Chromium uses shared memory heavily, and Docker's default of 64 MB is
+    # small enough to crash a tab on a heavy page.
+    shm_size: 1gb
+    # A minimal init as PID 1, so the browser processes Playwright starts are
+    # reaped rather than left as zombies.
+    init: true

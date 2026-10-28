@@ -1,0 +1,5 @@
+# The Dockerfile only ever reads requirements.txt; the code is mounted at run
+# time instead. So everything is left out of the build context except that one
+# file: the build stays fast, and .env or venv/ can never end up in an image.
+*
+!requirements.txt
