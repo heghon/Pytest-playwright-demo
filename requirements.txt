@@ -38,7 +38,7 @@ parse==1.22.4
     #   pytest-bdd
 parse-type==0.6.6
     # via pytest-bdd
-playwright==1.64.0
+playwright==1.64.1
     # via
     #   -r requirements.in
     #   axe-playwright-python
@@ -78,7 +78,7 @@ rpds-py==2026.9.1
     # via
     #   jsonschema
     #   referencing
-ruff==0.17.1
+ruff==0.17.3
     # via -r requirements.in
 six==1.17.0
     # via parse-type
