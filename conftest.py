@@ -49,3 +49,24 @@ def pytest_addoption(parser):
             "Findings never fail a test."
         ),
     )
+    parser.addoption(
+        "--history-dir",
+        default="report-history",
+        metavar="DIR",
+        # Written --history-dir=DIR, never with a space: pytest picks its root
+        # folder before this file is read, and would take an existing DIR given
+        # on its own for a folder of tests.
+        help=(
+            "Where past reports are archived and compared with, one folder per "
+            "set of filters (default: report-history). Write it --history-dir=DIR."
+        ),
+    )
+    parser.addoption(
+        "--no-history",
+        action="store_true",
+        default=False,
+        help=(
+            "Neither compare this run with earlier ones nor archive it — for runs "
+            "that are not part of the story, like python check.py's."
+        ),
+    )

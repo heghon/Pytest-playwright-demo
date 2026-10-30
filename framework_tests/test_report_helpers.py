@@ -253,11 +253,10 @@ def test_trace_published(tmp_path, monkeypatch):
 
     assert "playwright show-trace test-artifacts/one/trace.zip" in content
     assert "From the folder holding this report" in content
-    # The trace's public URL, percent-encoded into the viewer's query string.
-    assert (
-        "https://trace.playwright.dev/?trace=https%3A%2F%2Fme.github.io%2Frepo"
-        "%2Ftest-artifacts%2Fone%2Ftrace.zip" in content
-    )
+    # The link carries the trace's path from the report, and works out the
+    # full URL in the browser, from wherever this copy of the report is read.
+    assert 'data-trace="test-artifacts/one/trace.zip"' in content
+    assert "new window.URL(a.dataset.trace,location.href)" in content
 
 
 # --- report cells ------------------------------------------------------------

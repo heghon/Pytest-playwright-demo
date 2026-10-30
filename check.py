@@ -97,6 +97,9 @@ def smoke():
         "smoke",
         f"--html={SMOKE_REPORT}",
         f"--output={SMOKE_REPORT.parent / 'test-artifacts'}",
+        # A check of the framework, not a run of the suite: it has no place in
+        # the history of runs, nor any run to be compared with.
+        "--no-history",
     )
     if not passed:
         return False, output

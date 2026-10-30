@@ -1,15 +1,16 @@
+import json
 import os
 import re
 from html import escape
 from pathlib import Path
-from urllib.parse import quote, urlencode
+from urllib.parse import quote
 
 import pytest
 from dotenv import load_dotenv
 from pytest_html import extras
 from pytest_metadata.plugin import metadata_key
 
-from stepdefs import accessibility
+from stepdefs import accessibility, history
 
 load_dotenv()
 
@@ -31,6 +32,7 @@ def pytest_configure(config):
     """
     # Read once here, so the hooks below only ask the results whether to act.
     accessibility.RESULTS.enabled = config.getoption("--accessibility", False)
+    history.CURRENT = _start_history(config)
 
     metadata = config.stash.get(metadata_key, None)
     if metadata is None:
@@ -38,6 +40,83 @@ def pytest_configure(config):
     for key, value in list(metadata.items()):
         if value is None or (isinstance(value, str) and not value.strip()):
             del metadata[key]
+
+
+def _start_history(config):
+    """
+    This run's place in the history — see stepdefs/history.py — or None when it
+    has none: --no-history, a --collect-only run, or no HTML report to archive.
+    """
+    if config.getoption("--no-history", True) or config.option.collectonly:
+        return None
+    if not config.getoption("htmlpath", None):
+        return None
+
+    # Paths only count when typed on the command line. Without any, pytest falls
+    # back on testpaths, which is every run and selects nothing.
+    paths = ()
+    if config.args_source == pytest.Config.ArgsSource.ARGS:
+        paths = tuple(_typed_path(arg, config.rootpath) for arg in config.args)
+    jira = config.getoption("--jira", None)
+    key, label = history.run_key(
+        markexpr=config.option.markexpr or "",
+        jira=_normalised_key(jira) if jira else "",
+        keyword=config.option.keyword or "",
+        paths=paths,
+        browsers=tuple(config.getoption("--browser", None) or ()),
+        channel=config.getoption("--browser-channel", None) or "",
+    )
+    run = history.Run(
+        key,
+        label,
+        Path(config.getoption("--history-dir")).resolve(),
+        commit=os.getenv("GITHUB_SHA", "")[:7] or history._git_commit(),
+    )
+    run.baseline = history.latest_run(run.history, key)
+    return run
+
+
+def _typed_path(arg: str, root: Path) -> str:
+    """
+    A path from the command line, written from the project root, so that
+    "stepdefs/x.py" and "./stepdefs/x.py" are the same filter. A node id's
+    "::test_name" part is kept as typed.
+    """
+    path, _, node = arg.partition("::")
+    resolved = Path(path).resolve()
+    if resolved.is_relative_to(root):
+        path = resolved.relative_to(root).as_posix()
+    return f"{path}::{node}" if node else path
+
+
+def _history_link(run) -> str:
+    """The history index: on the published site, or on this machine."""
+    if base := _publish_base_url():
+        return f"{base}/history/index.html"
+    return (run.history / "index.html").as_uri()
+
+
+def pytest_runtest_logreport(report):
+    if history.CURRENT is not None:
+        history.CURRENT.record(report, getattr(report, "scenario_name", ""))
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_sessionfinish(session):
+    """
+    Archives the run once its report exists. A wrapper, so this runs after every
+    other sessionfinish hook, pytest-html's own included — which is the one that
+    writes the report, last thing, with trylast.
+    """
+    yield
+    run = history.CURRENT
+    if run is None or not run.outcomes:
+        return
+    report_dir = _report_dir(session.config)
+    (report_dir / history.RESULTS_FILE).write_text(
+        json.dumps(run.results(), indent=1, ensure_ascii=False), encoding="utf-8"
+    )
+    history.archive(report_dir, run)
 
 
 # Where pytest-playwright will drop this test's artifacts, and whether the test
@@ -382,6 +461,21 @@ def _media_src(media: Path, report_dir: Path) -> str | None:
     return quote(location.as_posix())
 
 
+# Points the "Open in the trace viewer" link at the trace's full URL, resolved
+# from the address of the page being read. On mousedown and focus rather than
+# click: both happen before the browser follows the link, whichever button or
+# key follows it — a middle click or a ctrl-click never fires "click". Single
+# quotes only — this string ends up inside an HTML attribute.
+#
+# window.URL, never a bare URL: an inline handler looks names up on the element
+# and the document before the window, and document.URL is the page's address as
+# a string — "URL is not a constructor", and the link never moves.
+_OPEN_TRACE_JS = (
+    "(function(a){a.href='" + TRACE_VIEWER_URL + "?trace='"
+    "+encodeURIComponent(new window.URL(a.dataset.trace,location.href).href);})(this)"
+)
+
+
 # Inline handler for the "Copy" button next to the trace command.
 # It has to be an onclick attribute: pytest-html injects HTML extras with
 # insertAdjacentHTML, which runs inline handlers but never executes <script>
@@ -589,19 +683,24 @@ def _trace_extra(trace: Path, report_dir: Path):
     never leaves the machine that wrote it, so it gets the absolute path and you
     can paste the command into any terminal without minding the directory.
 
-    Published runs also get a one-click link into the hosted viewer, built from
-    REPORT_BASE_URL, and then nobody has to touch a terminal at all.
+    Published runs also get a one-click link into the hosted viewer, and then
+    nobody has to touch a terminal at all. The viewer needs the trace's full
+    URL, which the link works out in the browser, from the page's own address —
+    see _OPEN_TRACE_JS. The same report is published twice, as the front page
+    and in the history, and each copy then opens its own trace: the front page
+    never depends on a history copy that may since have expired.
     """
-    base_url = _publish_base_url()
     location = _relative_to_report(trace, report_dir)
 
     link = ""
-    if base_url and not location.is_absolute():
-        trace_url = f"{base_url}/{quote(location.as_posix())}"
-        viewer_url = f"{TRACE_VIEWER_URL}?{urlencode({'trace': trace_url})}"
+    if _publish_base_url() and not location.is_absolute():
         link = (
             f'<a class="artifact__link" target="_blank" rel="noopener" '
-            f'href="{escape(viewer_url, quote=True)}">Open in the trace viewer</a>'
+            f'href="{TRACE_VIEWER_URL}" '
+            f'data-trace="{escape(quote(location.as_posix()), quote=True)}" '
+            f'onmousedown="{escape(_OPEN_TRACE_JS, quote=True)}" '
+            f'onfocus="{escape(_OPEN_TRACE_JS, quote=True)}">'
+            f"Open in the trace viewer</a>"
         )
         where = "From the folder holding this report"
     else:
@@ -781,6 +880,8 @@ def _rewrite_test_cell(report, cells):
             # A test with no scenario behind it keeps whatever pytest-html put
             # in the cell; only the grouping is added.
             label = escape(title) if title else _cell_text(str(cell))
+            # 🔴 / 🟢 / 🆕 when the test changed since the compared run.
+            label = history.row_icon(getattr(report, "change", "")) + label
             cells[index] = (
                 f'<td class="col-testId" title="{escape(report.nodeid, quote=True)}" '
                 f'data-folder="{escape(folder, quote=True)}" '
@@ -996,11 +1097,15 @@ _GROUPING_JS = """
 """
 
 
-def pytest_html_results_summary(postfix):
+def pytest_html_results_summary(prefix, postfix):
+    # One line at the top: what changed since the last comparable run.
+    if history.CURRENT is not None:
+        prefix.append(
+            history.panel_html(history.CURRENT, _history_link(history.CURRENT))
+        )
     postfix.append(_GROUPING_JS)
-    # Empty without --accessibility. pytest-html calls this every time it
-    # rewrites the report during the run, so the section is always as complete
-    # as the run so far.
+    # Empty without --accessibility. pytest-html calls this hook once, at the end
+    # of the run, so the section holds every check the run made.
     postfix.append(accessibility.section_html(accessibility.RESULTS))
 
 
@@ -1017,6 +1122,7 @@ def pytest_runtest_makereport(item, call):
     report.group_folder, report.group_feature = _grouping_of(item, data)
     report.engine = _engine_of(item)
     report.jira_keys = _jira_keys_of(item)
+    report.change = history.CURRENT.change_for(report) if history.CURRENT else ""
 
     # "call" phase: the test body just ran. Only note the verdict here — the
     # artifacts don't exist on disk yet.

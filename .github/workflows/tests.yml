@@ -326,6 +326,14 @@ jobs:
           fi
           printf '%s\n' "$DOTENV" > .env
 
+      # The run is compared with the last one that used the same filters, and
+      # archived next to it: both live in the published site's history/, which
+      # a deployment would otherwise wipe. Fetched into report-history/, the
+      # folder pytest reads and extends. Nothing published yet only means the
+      # history starts here. See utils/site.py.
+      - name: Setup · Fetch the published report history
+        run: python -m utils.site fetch "$REPORT_BASE_URL" published --history report-history
+
       # Before the suite, because the suite's report is built by the code these
       # test: if they fail, the report about to be produced cannot be trusted.
       - name: Tests · Run the framework's unit tests
@@ -362,25 +370,41 @@ jobs:
           echo "Running: pytest ${ARGS[*]}"
           pytest "${ARGS[@]}"
 
-      # No assembling left to do: --output puts the failure artifacts under
-      # reports/ and --html names the report index.html, so the folder pytest
-      # produces is already the publishable site — and already the layout every
-      # path in the report is written against. This step only checks there is
-      # something to publish.
-      - name: Report · Check the report was produced
+      # The site to publish: the front page plus the history pytest just
+      # extended. The front page is the address in the README, where someone
+      # goes to see how the project stands, so only a full run takes it over. A
+      # run narrowed to one tag or one issue would answer that question wrongly
+      # while looking perfectly healthy: it goes to the history, under its own
+      # filters, and the front page stays the last full run, as published.
+      - name: Report · Assemble the site
         id: bundle
         if: always()
+        env:
+          MARKER: ${{ inputs.marker || 'all' }}
+          JIRA: ${{ inputs.jira }}
         run: |
           if [ ! -f reports/index.html ]; then
             echo "The run produced no report — leaving the published one alone."
             echo "ready=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "ready=true" >> "$GITHUB_OUTPUT"
+          FRONT=published
+          if [ "$MARKER" = "all" ] && [ -z "$JIRA" ]; then
+            FRONT=reports
+          fi
+          # Exit code 3: a filtered run, and no front page published yet to
+          # keep. Better to publish nothing than a site without a front page.
+          if python -m utils.site assemble --front "$FRONT" --history report-history --out public; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No front page to publish alongside this filtered run — the site is left as it was."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Both uploads wait on a bundle actually existing. Publishing an empty
       # site would replace the last good report with a 404 — worse than keeping
-      # a stale one around.
+      # a stale one around. The downloadable artifact is this run's own report,
+      # whatever the filters; Pages gets the assembled site.
       - name: Report · Upload the bundle as a downloadable artifact
         if: ${{ always() && steps.bundle.outputs.ready == 'true' }}
         uses: actions/upload-artifact@v7
@@ -393,7 +417,7 @@ jobs:
         if: ${{ always() && steps.bundle.outputs.ready == 'true' }}
         uses: actions/upload-pages-artifact@v5
         with:
-          path: reports/
+          path: public/
 
   # Its own job because a Pages deployment needs the github-pages environment,
   # which is granted per job — not because of the fresh runner.
@@ -410,17 +434,14 @@ jobs:
     # one case where you have deliberately picked an engine and want to see the
     # result. Those runs still leave the report as a downloadable artifact.
     #
-    # A filtered run does not publish either, for the same reason. The address
-    # in the README is where someone goes to see how the project stands, and a
-    # report holding four API scenarios would answer that question wrongly while
-    # looking perfectly healthy. Picking a tag or an issue is a question you are
-    # asking yourself, so the answer stays in the run's own artifact.
+    # A filtered run on main publishes too, but only into the history: the
+    # assemble step above keeps the last full run on the front page. Without
+    # publishing, the next run with the same filters would have nothing to be
+    # compared with.
     if: >-
       ${{ !cancelled()
       && needs.test.outputs.published == 'true'
-      && github.ref == 'refs/heads/main'
-      && (github.event_name != 'workflow_dispatch'
-          || (inputs.marker == 'all' && inputs.jira == '')) }}
+      && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
 
     environment:

@@ -25,3 +25,6 @@ test-results/
 playwright-report/
 # What the quality check (python check.py) writes, kept away from reports/.
 check-reports/
+
+# Past reports, archived per set of filters and compared with (stepdefs/history.py).
+report-history/

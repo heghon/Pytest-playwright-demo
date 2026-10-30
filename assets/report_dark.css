@@ -272,6 +272,28 @@
 }
 
 /*------------------
+ * Changes since the last comparable run
+ *
+ * One line at the top of the report, from stepdefs/history.py, and the emoji
+ * in front of a changed test's name in the table.
+ *------------------*/
+.changes {
+  margin: 6px 0 10px;
+  padding: 6px 10px;
+  border-left: 4px solid #8a9bb0;
+  font-size: 14px;
+  background-color: #f7f9fb;
+}
+
+.changes a {
+  color: #14539a;
+}
+
+.change {
+  cursor: help;
+}
+
+/*------------------
  * Accessibility section
  *
  * Only rendered with --accessibility: one foldable entry per page checked,
@@ -632,6 +654,16 @@
 
   .artifact__copy:hover {
     background-color: #383c43;
+  }
+
+  .changes {
+    border-left-color: #5a6b80;
+    background-color: #24262b;
+    color: #cfd3d9;
+  }
+
+  .changes a {
+    color: #8ab8e8;
   }
 
   .a11y__summary,

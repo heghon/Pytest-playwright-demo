@@ -144,8 +144,9 @@ On CI the suite only runs when you start it yourself — Actions → Playwright 
 → Run workflow — where the same engines are a dropdown, alongside one for the tag
 to run and a free-text box for a single JIRA issue. The issue wins over the tag if
 both are given. Run the whole suite from `main` and the report is published to
-Pages; a run narrowed to one tag or one issue stays as a downloadable artifact
-instead, so a partial result never replaces the published one. 
+Pages; a run narrowed to one tag or one issue is published to the report
+history instead, under its own filters, so a partial result never replaces the
+front page. 
 The other triggers (on push, nightly, and a few
 more) are written out and commented at the top of
 [`.github/workflows/tests.yml`](.github/workflows/tests.yml), ready to switch on.
@@ -174,6 +175,25 @@ picked up without rebuilding, and the report lands in `reports/` as usual.
 Every run writes `reports/`, a self-contained folder: `index.html` plus the failure artifacts under `test-artifacts/`. Results are filed under the category folder and then the feature they came from, both foldable, so the table stays readable as the suite grows. A failing scenario carries its own evidence inline — a screenshot, the video of the run, and a copyable `playwright show-trace` command, which resolves from `reports/` itself. Delete the folder and the run leaves no trace behind.
 
 CI publishes the latest run to **[the live report](https://heghon.github.io/Pytest-playwright-demo/)**, where each failure also gets a one-click link into the [Playwright trace viewer](https://trace.playwright.dev/) — no download, no terminal. The same bundle is attached to every run as the `playwright-report` artifact if you'd rather read it offline.
+
+### What changed since the last run
+
+A line at the top of the report compares the run with the previous one that used
+the same filters (same tag or issue, same paths, same browser), and counts only
+what changed: 🔴 **regressions** (passed before, fail now), 🟢 **fixes** (failed
+before, pass now) and 🆕 **new** tests. The same emoji marks those tests in the
+table. A test that stays green, or stays red, isn't mentioned.
+
+Every run is also archived in `report-history/`, one folder per set of filters,
+with an `index.html` listing them; on CI it's the `history/` page of the live
+report. The newest 5 runs of each are kept, for 7 days at most, and all but the
+newest lose their videos and traces to save space. Filters left unused for more
+than 7 days start over, with nothing to compare with. To leave a run out of the
+history:
+
+```bash
+pytest --no-history
+```
 
 ## Checking the code
 
