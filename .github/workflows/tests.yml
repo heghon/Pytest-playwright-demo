@@ -65,6 +65,16 @@ on:
         type: boolean
         default: false
 
+      reset_history:
+        description: "Reset the report history: this run starts a new one, for every set of filters"
+        # The escape hatch, never needed in the normal course: retention already
+        # prunes on every run. For a clean slate on purpose — results from a
+        # broken environment, tests renamed in bulk. On main, the run's
+        # publication replaces the old history; elsewhere nothing is published,
+        # so nothing changes.
+        type: boolean
+        default: false
+
   # LIVE — but only Dependabot's own pull requests get past the job conditions.
   # It is how a bump that cannot even be installed gets caught before merging,
   # which is exactly how some breakage reached main once. A bump that installs
@@ -345,6 +355,7 @@ jobs:
           JIRA: ${{ inputs.jira }}
           # "true" when ticked; empty on any trigger other than a manual run.
           ACCESSIBILITY: ${{ inputs.accessibility }}
+          RESET_HISTORY: ${{ inputs.reset_history }}
         run: |
           # Built as an array rather than a string of flags: "-m api" has to
           # reach pytest as two arguments, and a quoted string would arrive as
@@ -366,6 +377,10 @@ jobs:
           fi
           if [ "$ACCESSIBILITY" = "true" ]; then
             ARGS+=(--accessibility)
+          fi
+          if [ "$RESET_HISTORY" = "true" ]; then
+            echo "::notice::The report history is reset: this run starts a new one."
+            ARGS+=(--reset-history)
           fi
           echo "Running: pytest ${ARGS[*]}"
           pytest "${ARGS[@]}"

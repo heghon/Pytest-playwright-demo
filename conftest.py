@@ -62,6 +62,16 @@ def pytest_addoption(parser):
         ),
     )
     parser.addoption(
+        "--reset-history",
+        action="store_true",
+        default=False,
+        help=(
+            "Empty the report history before this run, which then starts a new "
+            "one: nothing to compare with, no past flakiness. Every set of "
+            "filters is wiped, not only this run's."
+        ),
+    )
+    parser.addoption(
         "--no-history",
         action="store_true",
         default=False,

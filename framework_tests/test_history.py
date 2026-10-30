@@ -1,6 +1,7 @@
 """
-The run history in stepdefs/history.py: filter keys, comparison, the one-line
-panel, and the archive with its trimming. Made-up runs on a temporary folder.
+The run history in stepdefs/history.py: filter keys, comparison, flakiness, the
+one-line panel, and the archive with its retention. Made-up runs on a temporary
+folder.
 """
 
 import json
@@ -11,13 +12,17 @@ import pytest
 
 from stepdefs.history import (
     KEEP,
-    MAX_AGE,
+    REPORT_MAX_AGE,
+    RESULTS_MAX_AGE,
     Run,
     compare,
+    flakiness,
     latest_run,
+    load_observations,
     merge_outcome,
     panel_html,
     prune,
+    reset,
     row_icon,
     run_key,
     write_index,
@@ -195,7 +200,10 @@ def _archived(history, key, run_id, outcome="passed"):
             {
                 "run_id": run_id,
                 "label": "full run · chromium",
-                "started": "2099-01-01T10:00:00+00:00",
+                # Derived from the folder's name, as a real run's is.
+                "started": datetime.strptime(run_id, "%Y-%m-%dT%H-%M-%SZ")
+                .replace(tzinfo=UTC)
+                .isoformat(),
                 "commit": "abc1234",
                 "changes": {"regression": 1, "fixed": 0, "new": 0},
                 "results": {"t": {"outcome": outcome, "name": ""}},
@@ -231,23 +239,37 @@ def test_latest_unreadable(tmp_path):
 NOW = datetime(2099, 1, 10, tzinfo=UTC)
 
 
+def _contents(run):
+    """What is left of an archived run: its files' names."""
+    return {p.name for p in run.rglob("*") if p.is_file()}
+
+
 def test_prune_keep(tmp_path):
-    """Only the newest KEEP runs of a key stay."""
+    """Past the newest KEEP runs, a run keeps only its results."""
     for day in range(1, KEEP + 3):
         _archived(tmp_path, "k", f"2099-01-{day:02d}T10-00-00Z")
     prune(tmp_path, now=NOW)
-    kept = sorted(p.name for p in (tmp_path / "k").iterdir())
-    assert len(kept) == KEEP
-    assert kept[0] == "2099-01-03T10-00-00Z"
+    runs = sorted((tmp_path / "k").iterdir())
+    assert len(runs) == KEEP + 2
+    assert all(_contents(run) == {"results.json"} for run in runs[:2])
+    assert all("index.html" in _contents(run) for run in runs[2:])
 
 
-def test_prune_age(tmp_path):
-    """A run older than MAX_AGE goes, however few runs its key has."""
+def test_prune_report_age(tmp_path):
+    """A run older than REPORT_MAX_AGE keeps only its results, whatever its rank."""
     old = _archived(tmp_path, "k", "2099-01-01T10-00-00Z")
     recent = _archived(tmp_path, "k", "2099-01-09T10-00-00Z")
-    prune(tmp_path, now=datetime(2099, 1, 10, tzinfo=UTC))
-    assert not old.exists()
-    assert recent.exists()
+    prune(tmp_path, now=NOW)
+    assert _contents(old) == {"results.json"}
+    assert "video.webm" in _contents(recent)
+
+
+def test_prune_results_age(tmp_path):
+    """A run older than RESULTS_MAX_AGE goes altogether."""
+    run = _archived(tmp_path, "k", "2099-01-01T10-00-00Z")
+    _archived(tmp_path, "k", "2099-02-09T10-00-00Z")
+    prune(tmp_path, now=datetime(2099, 2, 10, tzinfo=UTC))
+    assert not run.exists()
 
 
 def test_prune_empty_key(tmp_path):
@@ -257,14 +279,36 @@ def test_prune_empty_key(tmp_path):
     assert not (tmp_path / "used-once").exists()
 
 
-def test_prune_age_edge(tmp_path):
-    """A run exactly MAX_AGE old is still kept; a second more and it goes."""
+def test_prune_age_edges(tmp_path):
+    """Each limit keeps a run exactly at it, and acts a second later."""
     run = _archived(tmp_path, "k", "2099-01-01T10-00-00Z")
     started = datetime(2099, 1, 1, 10, tzinfo=UTC)
-    prune(tmp_path, now=started + MAX_AGE)
+    second = timedelta(seconds=1)
+    prune(tmp_path, now=started + REPORT_MAX_AGE)
+    assert "index.html" in _contents(run)
+    prune(tmp_path, now=started + REPORT_MAX_AGE + second)
+    assert _contents(run) == {"results.json"}
+    prune(tmp_path, now=started + RESULTS_MAX_AGE)
     assert run.exists()
-    prune(tmp_path, now=started + MAX_AGE + timedelta(seconds=1))
+    prune(tmp_path, now=started + RESULTS_MAX_AGE + second)
     assert not run.exists()
+
+
+def test_reset(tmp_path):
+    """A reset empties every key and the index, and leaves the folder to fill."""
+    history = tmp_path / "history"
+    _archived(history, "all-chromium", "2099-01-01T10-00-00Z")
+    _archived(history, "tag-api-chromium", "2099-01-02T10-00-00Z")
+    write_index(history)
+    reset(history)
+    assert history.is_dir()
+    assert not any(history.iterdir())
+
+
+def test_reset_missing(tmp_path):
+    """Resetting a history that was never created simply creates it."""
+    reset(tmp_path / "never-made")
+    assert (tmp_path / "never-made").is_dir()
 
 
 def test_prune_odd_name(tmp_path):
@@ -336,3 +380,128 @@ def test_run_id(tmp_path):
     """A run's folder name is its start time, which sorts in time order."""
     run = Run("k", "l", tmp_path, started=datetime(2099, 1, 2, 3, 4, 5, tzinfo=UTC))
     assert run.run_id == "2099-01-02T03-04-05Z"
+
+
+def test_index_reports_only(tmp_path):
+    """A run reduced to its results is left off the index: it has no report to open."""
+    stripped = _archived(tmp_path, "k", "2099-01-01T10-00-00Z")
+    _archived(tmp_path, "k", "2099-01-09T10-00-00Z")
+    prune(tmp_path, now=NOW)
+    write_index(tmp_path)
+    html = (tmp_path / "index.html").read_text()
+    assert stripped.name not in html
+    assert "2099-01-09T10-00-00Z" in html
+
+
+# --- flakiness -----------------------------------------------------------------
+
+
+def _seen(*outcomes, commit="abc"):
+    """A test's archived outcomes, in time order, all on one commit by default."""
+    return [(f"2099-01-{day:02d}", o, commit) for day, o in enumerate(outcomes, 1)]
+
+
+def test_flaky_steady():
+    """A test that keeps its outcome has no flips, red or green."""
+    assert flakiness(_seen("passed", "passed", "passed")).flips == 0
+    assert flakiness(_seen("failed", "failed", "failed")).flips == 0
+
+
+def test_flaky_one_flip():
+    """One flip is a regression or a fix, not flakiness."""
+    found = flakiness(_seen("passed", "passed", "failed"))
+    assert found.flips == 1
+    assert not found.flaky
+
+
+def test_flaky_two_flips():
+    """Two flips make a test flaky."""
+    found = flakiness(_seen("passed", "failed", "passed"))
+    assert (found.flips, found.runs) == (2, 3)
+    assert found.flaky
+
+
+def test_flaky_skipped():
+    """A skipped run says nothing, and does not break a flip in two."""
+    found = flakiness(_seen("passed", "skipped", "failed", "skipped", "passed"))
+    assert (found.flips, found.runs) == (2, 3)
+
+
+def test_flaky_errors():
+    """An error counts as a failure."""
+    assert flakiness(_seen("error", "passed", "failed")).flips == 2
+
+
+def test_flaky_same_code():
+    """Flips between runs on the same commit are counted apart."""
+    observations = [
+        ("2099-01-01", "passed", "aaa"),
+        ("2099-01-02", "failed", "bbb"),
+        ("2099-01-03", "passed", "bbb"),
+    ]
+    found = flakiness(observations)
+    assert (found.flips, found.same_code) == (2, 1)
+    assert found.describe() == (
+        "Flaky: changed outcome 2 times in its last 3 runs, 1 of them on the same code."
+    )
+
+
+def test_observations(tmp_path):
+    """Outcomes are gathered from every key, oldest first."""
+    _archived(tmp_path, "all-chromium", "2099-01-02T10-00-00Z", outcome="failed")
+    _archived(tmp_path, "tag-api-chromium", "2099-01-01T10-00-00Z")
+    found = load_observations(tmp_path)["t"]
+    assert [outcome for _, outcome, _ in found] == ["passed", "failed"]
+
+
+def _flaky_run(tmp_path, baseline=None):
+    """A run whose test "t" passed, failed, passed in the archive, and fails now."""
+    run = _run(tmp_path, baseline, t="failed")
+    run.observations = {"t": _seen("passed", "failed", "passed")}
+    return run
+
+
+def test_run_flaky(tmp_path):
+    """This run's outcome counts too: pass, fail, pass, then fail is 3 flips."""
+    found = _flaky_run(tmp_path).flaky()
+    assert set(found) == {"t"}
+    assert found["t"].flips == 3
+
+
+def test_run_flaky_row(tmp_path):
+    """A flaky test's row gets the evidence for its tooltip."""
+    run = _flaky_run(tmp_path)
+    assert run.flaky_for(_phase("call", "failed")).startswith(
+        "Flaky: changed outcome 3"
+    )
+
+
+def test_row_both():
+    """🎲 is added to the change emoji, never instead of it."""
+    icons = row_icon("regression", "Flaky: changed outcome 2 times")
+    assert icons.index("🔴") < icons.index("🎲")
+
+
+def test_row_flaky_only():
+    """A flaky test with no change still shows 🎲."""
+    assert ">🎲</span>" in row_icon("", "Flaky: changed outcome 2 times")
+
+
+def test_panel_flaky(tmp_path):
+    """The panel counts flaky tests alongside the changes."""
+    run = _flaky_run(tmp_path, _baseline(t="passed"))
+    html = panel_html(run, "")
+    assert "🔴 1 regression" in html
+    assert "🎲 1 flaky" in html
+
+
+def test_panel_flaky_first(tmp_path):
+    """Flakiness shows even on a first run: it comes from every key's history."""
+    html = panel_html(_flaky_run(tmp_path), "")
+    assert "First run with these filters" in html
+    assert "🎲 1 flaky" in html
+
+
+def test_results_flaky(tmp_path):
+    """results.json records which tests were flaky, for the history index."""
+    assert _flaky_run(tmp_path).results()["flaky"] == ["t"]

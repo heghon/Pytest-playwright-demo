@@ -72,7 +72,18 @@ def _start_history(config):
         Path(config.getoption("--history-dir")).resolve(),
         commit=os.getenv("GITHUB_SHA", "")[:7] or history._git_commit(),
     )
+    if config.getoption("--reset-history", False):
+        # Asked for by hand: the run starts a history of its own, and on CI its
+        # publication replaces the old one.
+        history.reset(run.history)
+    # Before anything is read, not only after the run: after a long pause the
+    # history still holds what has expired since, and a baseline or a flip from
+    # two months ago has no business in today's report.
+    history.prune(run.history)
     run.baseline = history.latest_run(run.history, key)
+    # Every key's runs, not only this one's: flakiness is about the test, and a
+    # tag run holds as much evidence about its tests as a full run does.
+    run.observations = history.load_observations(run.history)
     return run
 
 
@@ -880,8 +891,14 @@ def _rewrite_test_cell(report, cells):
             # A test with no scenario behind it keeps whatever pytest-html put
             # in the cell; only the grouping is added.
             label = escape(title) if title else _cell_text(str(cell))
-            # 🔴 / 🟢 / 🆕 when the test changed since the compared run.
-            label = history.row_icon(getattr(report, "change", "")) + label
+            # 🔴 / 🟢 / 🆕 when the test changed since the compared run, and
+            # 🎲 beside it when the test is flaky.
+            label = (
+                history.row_icon(
+                    getattr(report, "change", ""), getattr(report, "flaky", "")
+                )
+                + label
+            )
             cells[index] = (
                 f'<td class="col-testId" title="{escape(report.nodeid, quote=True)}" '
                 f'data-folder="{escape(folder, quote=True)}" '
@@ -1123,6 +1140,7 @@ def pytest_runtest_makereport(item, call):
     report.engine = _engine_of(item)
     report.jira_keys = _jira_keys_of(item)
     report.change = history.CURRENT.change_for(report) if history.CURRENT else ""
+    report.flaky = history.CURRENT.flaky_for(report) if history.CURRENT else ""
 
     # "call" phase: the test body just ran. Only note the verdict here — the
     # artifacts don't exist on disk yet.

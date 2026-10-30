@@ -184,16 +184,27 @@ what changed: 🔴 **regressions** (passed before, fail now), 🟢 **fixes** (fa
 before, pass now) and 🆕 **new** tests. The same emoji marks those tests in the
 table. A test that stays green, or stays red, isn't mentioned.
 
+A 🎲 is added to the row of any **flaky** test: one whose outcome flipped between
+pass and fail at least twice across its recent runs, whatever their filters.
+Its tooltip gives the evidence, including how many flips happened on the same
+code; the top line counts them too.
+
 Every run is also archived in `report-history/`, one folder per set of filters,
 with an `index.html` listing them; on CI it's the `history/` page of the live
-report. The newest 5 runs of each are kept, for 7 days at most, and all but the
-newest lose their videos and traces to save space. Filters left unused for more
-than 7 days start over, with nothing to compare with. To leave a run out of the
-history:
+report. The newest 5 runs of each keep their report, for 7 days at most, and all
+but the newest lose their videos and traces to save space. Older runs keep only
+their results, a few KB, for 30 days: that's what flakiness is measured on, and
+what a run is compared with. Filters left unused for more than 30 days start
+over. To leave a run out of the history, or to wipe the history and start a new
+one with this run (every set of filters, not only the run's own):
 
 ```bash
 pytest --no-history
+pytest --reset-history
 ```
+
+On CI, the reset is the *Reset the report history* checkbox of the manual run,
+unticked by default. From `main`, that run's publication replaces the old history.
 
 ## Checking the code
 
