@@ -49,14 +49,14 @@ pyee==14.0.0
     # via playwright
 pygments==2.21.0
     # via pytest
-pytest==9.1.1
+pytest==9.2.0
     # via
     #   -r requirements.in
     #   pytest-bdd
     #   pytest-html
     #   pytest-metadata
     #   pytest-playwright
-pytest-bdd==9.0.0
+pytest-bdd==9.0.1
     # via -r requirements.in
 pytest-html==4.2.0
     # via -r requirements.in
