@@ -100,6 +100,9 @@ def smoke():
         # A check of the framework, not a run of the suite: it has no place in
         # the history of runs, nor any run to be compared with.
         "--no-history",
+        # A broken framework fails every time: retrying would only double the
+        # wait for the answer.
+        "--reruns=0",
     )
     if not passed:
         return False, output

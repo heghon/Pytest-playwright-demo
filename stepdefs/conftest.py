@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 from html import escape
 from pathlib import Path
 from urllib.parse import quote
@@ -9,6 +10,7 @@ import pytest
 from dotenv import load_dotenv
 from pytest_html import extras
 from pytest_metadata.plugin import metadata_key
+from pytest_rerunfailures import get_reruns_count
 
 from stepdefs import accessibility, history
 
@@ -136,6 +138,14 @@ def pytest_sessionfinish(session):
 # see _artifacts_dir below.
 ARTIFACTS_DIR = pytest.StashKey[Path]()
 TEST_FAILED = pytest.StashKey[bool]()
+
+# Retries (--reruns in pytest.ini) run the same item again, so these carry what a
+# failed attempt left behind over to the one after it: how this attempt failed,
+# if it has, the earlier attempts that failed, and this attempt's report of each
+# phase, so the verdict can be put on the one the row is drawn from.
+ATTEMPT_FAILURE = pytest.StashKey[dict | None]()
+FAILED_ATTEMPTS = pytest.StashKey[list]()
+PHASE_REPORTS = pytest.StashKey[dict]()
 
 
 # Failure videos are recorded at half the viewport, rather than
@@ -733,6 +743,98 @@ def _trace_extra(trace: Path, report_dir: Path):
     )
 
 
+def _failure_media(folder: Path | None, report_dir: Path, attempt: str = ""):
+    """
+    The screenshot, video and trace pytest-playwright kept for a failed attempt,
+    in that order. attempt names the attempt on the screenshot, for the first
+    attempt of a retried test; the video and trace sit in its block already.
+    """
+    if folder is None or not folder.is_dir():
+        return []
+    name = f"Screenshot on failure{attempt}"
+    media = []
+    for screenshot in sorted(folder.glob("test-failed-*.png")):
+        media.append(_screenshot_extra(screenshot, report_dir, name))
+    for video in sorted(folder.glob("video*.webm")):
+        media.append(_video_extra(video, report_dir))
+    for trace in sorted(folder.glob("trace*.zip")):
+        media.append(_trace_extra(trace, report_dir))
+    return media
+
+
+def _failure_of(report, data) -> dict:
+    """
+    How an attempt failed: where, what was said, and a fingerprint to tell two
+    failures apart by.
+
+    Where is the Gherkin step, or the phase for a test without one. What was said
+    is the first line of the error — "Locator.click: Timeout 30000ms exceeded."
+    — and the fingerprint is both, with every number blanked: a timeout that
+    lasted a few ms more, or a different id in a URL, is still the same failure.
+    """
+    crash = getattr(report.longrepr, "reprcrash", None)
+    text = crash.message if crash is not None else str(report.longrepr or "")
+    message = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    step = None
+    if data is not None:
+        step = next(
+            (s for s in data["steps"] if s["status"] in ("failed", "running")), None
+        )
+    where = f"{step['keyword']} {step['name']}" if step else f"during {report.when}"
+    return {
+        "where": where,
+        "message": message,
+        "fingerprint": (where, re.sub(r"\d+", "#", message)),
+    }
+
+
+def _retry_verdict(first: dict, failure: dict | None) -> str:
+    """How the retry went, as a key of history.RETRIED."""
+    if failure is None:
+        return "passed"
+    return "same" if failure["fingerprint"] == first["fingerprint"] else "different"
+
+
+def _retry_extra(verdict: str, first: dict, report_dir: Path):
+    """
+    What the first attempt of a retried test ran into, at the top of its row.
+
+    A retry that failed the same way needs no more than a line: the evidence
+    below says it all, twice over would say nothing more — and the first
+    attempt's files are deleted for it. Otherwise the first attempt matters,
+    because it is the failure nobody would see in the retry: its error, and its
+    screenshot, video and trace, nested in this block.
+    """
+    title = history.RETRIED[verdict]
+    if verdict == "same":
+        return extras.html(
+            f'<div class="artifact artifact--retry artifact--retry-same">'
+            f'<div class="artifact__label">{escape(title)}</div>'
+            f'<div class="artifact__note">Retried once: same step, same error. '
+            f"Only the retry's evidence is kept, below.</div>"
+            f"</div>"
+        )
+
+    media = "".join(
+        extra["content"]
+        for extra in _failure_media(first["folder"], report_dir, " · first attempt")
+    )
+    then = (
+        "The retry passed."
+        if verdict == "passed"
+        else "The retry's own failure is below."
+    )
+    return extras.html(
+        f'<div class="artifact artifact--retry artifact--retry-{verdict}">'
+        f'<div class="artifact__label">{escape(title)}</div>'
+        f'<div class="artifact__note">The first attempt failed at '
+        f"<strong>{escape(first['where'])}</strong>. {then}</div>"
+        f'<code class="artifact__cmd">{escape(first["message"])}</code>'
+        f"{media}"
+        f"</div>"
+    )
+
+
 def _drop_links_column(cells):
     """
     Removes pytest-html's "Links" column. Every artifact is now rendered inline
@@ -891,11 +993,13 @@ def _rewrite_test_cell(report, cells):
             # A test with no scenario behind it keeps whatever pytest-html put
             # in the cell; only the grouping is added.
             label = escape(title) if title else _cell_text(str(cell))
-            # 🔴 / 🟢 / 🆕 when the test changed since the compared run, and
-            # 🎲 beside it when the test is flaky.
+            # 🔴 / 🟢 / 🆕 when the test changed since the compared run, 🟠
+            # when it passed on retry, and 🎲 beside them when it is flaky.
             label = (
                 history.row_icon(
-                    getattr(report, "change", ""), getattr(report, "flaky", "")
+                    getattr(report, "change", ""),
+                    getattr(report, "flaky", ""),
+                    getattr(report, "retry", ""),
                 )
                 + label
             )
@@ -913,9 +1017,34 @@ def _cell_text(cell: str) -> str:
     return match.group(1) if match else cell
 
 
+def _mark_passed_on_retry(cells):
+    """
+    Turns the Result cell orange, by a class and a tooltip only. The text has to
+    stay "Passed": pytest-html files the row under it, as its CSS class and for
+    the Passed filter, and the test did pass.
+    """
+    for index, cell in enumerate(cells):
+        if 'class="col-result"' in str(cell):
+            cells[index] = str(cell).replace(
+                'class="col-result"',
+                f'class="col-result col-result--retried" '
+                f'title="{escape(history.RETRIED["passed"], quote=True)}"',
+                1,
+            )
+            return
+
+
 def pytest_html_results_table_row(report, cells):
+    # A failed attempt that was retried gets no row of its own: the retry's row
+    # tells its story, at the top of its details. Emptying the list is
+    # pytest-html's way to drop a row.
+    if report.outcome == "rerun":
+        del cells[:]
+        return
     _drop_links_column(cells)
     _rewrite_test_cell(report, cells)
+    if getattr(report, "retry", "") == "passed":
+        _mark_passed_on_retry(cells)
     engine = getattr(report, "engine", "")
     engine_class = (
         "col-engine col-engine--none" if engine == NO_BROWSER else "col-engine"
@@ -1142,6 +1271,15 @@ def pytest_runtest_makereport(item, call):
     report.change = history.CURRENT.change_for(report) if history.CURRENT else ""
     report.flaky = history.CURRENT.flaky_for(report) if history.CURRENT else ""
 
+    # Each attempt starts with a clean slate: a retry runs the same item again.
+    if report.when == "setup":
+        item.stash[ATTEMPT_FAILURE] = None
+        item.stash[TEST_FAILED] = False
+        item.stash[PHASE_REPORTS] = {}
+    item.stash[PHASE_REPORTS][report.when] = report
+    if report.failed and item.stash[ATTEMPT_FAILURE] is None:
+        item.stash[ATTEMPT_FAILURE] = _failure_of(report, data)
+
     # "call" phase: the test body just ran. Only note the verdict here — the
     # artifacts don't exist on disk yet.
     if report.when == "call":
@@ -1152,27 +1290,67 @@ def pytest_runtest_makereport(item, call):
     # pytest-html gathers the extras of every phase into the one row it renders,
     # so hanging all three off the teardown report is fine.
     if report.when == "teardown":
+        _drop_playwright_extras(report)
+        failure = item.stash[ATTEMPT_FAILURE]
+        folder = item.stash.get(ARTIFACTS_DIR, None)
+        attempts = item.stash.setdefault(FAILED_ATTEMPTS, [])
+
+        # A failed attempt with a retry to come gets no row, so nothing to hang
+        # off it: what it left is set aside for the retry's row to show.
+        # pytest-playwright gives each attempt a folder of its own (-retry1),
+        # so its files are still there when that row is drawn.
+        if failure is not None and _will_retry(item):
+            attempts.append({**failure, "folder": folder})
+            return
+
         artifacts = []
         report_dir = _report_dir(item.config)
+
+        if attempts:
+            first = attempts[-1]
+            verdict = _retry_verdict(first, failure)
+            if history.CURRENT is not None:
+                history.CURRENT.retried[item.nodeid] = verdict
+            # The row is drawn from whichever phase decided the outcome, so
+            # every phase of this attempt carries the verdict.
+            for phase in item.stash[PHASE_REPORTS].values():
+                phase.retry = verdict
+            if verdict == "same" and first["folder"] is not None:
+                shutil.rmtree(first["folder"], ignore_errors=True)
+            artifacts.append(_retry_extra(verdict, first, report_dir))
 
         # The steps go in whatever the outcome: a passing scenario is worth
         # reading too, and it is the only place a report_note can show up.
         if data is not None:
             artifacts.append(_steps_extra(data))
 
-        folder = item.stash.get(ARTIFACTS_DIR, None)
-        if (
-            item.stash.get(TEST_FAILED, False)
-            and folder is not None
-            and folder.is_dir()
-        ):
-            for screenshot in sorted(folder.glob("test-failed-*.png")):
-                artifacts.append(_screenshot_extra(screenshot, report_dir))
-            for video in sorted(folder.glob("video*.webm")):
-                artifacts.append(_video_extra(video, report_dir))
-            for trace in sorted(folder.glob("trace*.zip")):
-                artifacts.append(_trace_extra(trace, report_dir))
+        if item.stash.get(TEST_FAILED, False):
+            artifacts.extend(_failure_media(folder, report_dir))
 
         artifacts = [a for a in artifacts if a is not None]
         if artifacts:
             report.extras = getattr(report, "extras", []) + artifacts
+
+
+def _drop_playwright_extras(report):
+    """
+    Removes the screenshot, video and trace pytest-playwright attaches itself.
+
+    It does so since 0.10, and with --self-contained-html it inlines the video
+    as base64: the very report size the linked media below exist to avoid. It
+    also brings back pytest-html's media viewer, beside our own artifacts, with
+    the same screenshot and video in it. Its trace link would only land in the
+    Links column, which is dropped. Ours are all HTML extras, so anything else
+    on a teardown report is its.
+    """
+    kept = [e for e in getattr(report, "extras", []) if e["format_type"] == "html"]
+    report.extras = kept
+
+
+def _will_retry(item) -> bool:
+    """
+    Whether pytest-rerunfailures will run this failed attempt again, decided
+    here because it marks the attempt as a rerun only after this hook returns.
+    """
+    reruns = get_reruns_count(item) or 0
+    return getattr(item, "execution_count", 1) <= reruns

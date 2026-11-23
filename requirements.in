@@ -18,5 +18,6 @@ pytest-bdd
 pytest-html
 pytest-metadata
 pytest-playwright
+pytest-rerunfailures
 python-dotenv
 ruff

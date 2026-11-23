@@ -293,6 +293,44 @@
   cursor: help;
 }
 
+/* Retries. A test that passed on retry keeps "Passed" in its Result cell —
+   pytest-html files the row under that text — and the colour and the dot say
+   the rest. The id outranks pytest-html's own ".passed .col-result". */
+#results-table .col-result--retried {
+  color: #c77700;
+}
+
+#results-table .col-result--retried::before {
+  content: "● ";
+}
+
+/* What the first attempt of a retried test ran into, at the top of its details:
+   orange when the retry passed, red when it failed too. Its own screenshot,
+   video and trace nest inside. */
+.artifact--retry {
+  border-left: 4px solid #e08a00;
+}
+
+.artifact--retry-same,
+.artifact--retry-different {
+  border-left-color: #c9372c;
+}
+
+.artifact--retry .artifact {
+  margin: 8px 0 0;
+}
+
+/* A failed attempt that was retried gets no row of its own (see conftest.py), so
+   pytest-html's Reruns filter would only ever show 0, and its Retried one is
+   pytest-retries', a plugin this project does not use. Both would read as "no
+   retries" next to the top line that counts them. */
+.filters input[data-test-result="rerun"],
+.filters input[data-test-result="rerun"] + span,
+.filters input[data-test-result="retried"],
+.filters input[data-test-result="retried"] + span {
+  display: none;
+}
+
 /*------------------
  * Accessibility section
  *
@@ -654,6 +692,19 @@
 
   .artifact__copy:hover {
     background-color: #383c43;
+  }
+
+  #results-table .col-result--retried {
+    color: #f0a040;
+  }
+
+  .artifact--retry {
+    border-left-color: #f0a040;
+  }
+
+  .artifact--retry-same,
+  .artifact--retry-different {
+    border-left-color: #e05a4f;
   }
 
   .changes {

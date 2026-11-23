@@ -29,6 +29,15 @@ code did not change and the result did; the tooltip says how many there were.
 The window is the history's, so a hint rather than a proof: a quick break and
 fix reads as two flips too.
 
+Retries. A failed test runs once more (--reruns in pytest.ini), and counts as
+what the retry found. One that failed and then passed is marked too, in place of
+the 🟢 it might otherwise get:
+
+    🟠 passed on retry   failed on the first attempt, passed on the second
+
+Its first attempt counts as a failure for flakiness, just before the retry, on
+the same code: a pass on retry is a flip, and a second one makes the test 🎲.
+
 The archive. Every run is copied to <history>/<key>/<run>/, report and results
 together. <history>/index.html lists the runs that still have a report. Per key,
 from the newest:
@@ -109,6 +118,15 @@ CHANGES = {
 }
 
 FLAKY_ICON = "🎲"
+
+# How a retried test's retry went, as results.json records it. Only "passed"
+# gets a mark on the row: the other two are failures, already plain to see.
+RETRIED = {
+    "passed": "Failed on the first attempt, passed on retry",
+    "same": "Failed twice, with the same error",
+    "different": "Failed twice, with a different error each time",
+}
+RETRY_ICON = "🟠"
 
 # pytest.ini's default -m, which leaves out the smoke scenarios. A run with it,
 # and nothing else, is a full run.
@@ -235,10 +253,13 @@ def load_observations(history: Path) -> dict[str, list[tuple[str, str, str]]]:
             continue
         started, commit = data.get("started", ""), data.get("commit", "")
         for nodeid, result in data.get("results", {}).items():
-            observations.setdefault(nodeid, []).append(
-                (started, result.get("outcome", ""), commit)
-            )
+            seen = observations.setdefault(nodeid, [])
+            if result.get("retry"):
+                # The first attempt, failed, just before the retry.
+                seen.append((started, "failed", commit))
+            seen.append((started, result.get("outcome", ""), commit))
     for outcomes in observations.values():
+        # Stable, so a retried test's two attempts stay in the order they ran.
         outcomes.sort(key=lambda observation: observation[0])
     return observations
 
@@ -283,12 +304,19 @@ class Run:
     baseline: dict | None = None
     # Every archived outcome of each test, for flakiness: see load_observations.
     observations: dict[str, list[tuple[str, str, str]]] = field(default_factory=dict)
+    # The tests retried in this run, each with how its retry went: a key of
+    # RETRIED, or "" while the retry is still running.
+    retried: dict[str, str] = field(default_factory=dict)
 
     @property
     def run_id(self) -> str:
         return self.started.strftime(RUN_ID_FORMAT)
 
     def record(self, report, name: str = "") -> None:
+        if report.outcome == "rerun":
+            # A failed attempt with a retry to come: the retry has the say.
+            self.retried.setdefault(report.nodeid, "")
+            return
         self.outcomes[report.nodeid] = merge_outcome(
             self.outcomes.get(report.nodeid), report
         )
@@ -314,8 +342,11 @@ class Run:
 
     def flakiness_of(self, nodeid: str, outcome: str) -> Flakiness:
         """A test's flakiness, its archived outcomes and this run's together."""
-        now = (self.started.isoformat(timespec="seconds"), outcome, self.commit)
-        return flakiness([*self.observations.get(nodeid, []), now])
+        started = self.started.isoformat(timespec="seconds")
+        now = [(started, outcome, self.commit)]
+        if nodeid in self.retried:
+            now.insert(0, (started, "failed", self.commit))
+        return flakiness([*self.observations.get(nodeid, []), *now])
 
     def flaky_for(self, report) -> str:
         """The 🎲 tooltip for this test so far, "" when it is not flaky."""
@@ -331,6 +362,9 @@ class Run:
         }
         return {nodeid: f for nodeid, f in found.items() if f.flaky}
 
+    def passed_on_retry(self) -> list[str]:
+        return sorted(n for n, retry in self.retried.items() if retry == "passed")
+
     def results(self) -> dict:
         """Everything results.json holds: enough for the next run to compare with."""
         return {
@@ -343,10 +377,16 @@ class Run:
             "changes": _counts(self.changes()),
             "flaky": sorted(self.flaky()),
             "results": {
-                nodeid: {"outcome": outcome, "name": self.names.get(nodeid, "")}
+                nodeid: self._result(nodeid, outcome)
                 for nodeid, outcome in sorted(self.outcomes.items())
             },
         }
+
+    def _result(self, nodeid: str, outcome: str) -> dict:
+        result = {"outcome": outcome, "name": self.names.get(nodeid, "")}
+        if nodeid in self.retried:
+            result["retry"] = self.retried[nodeid]
+        return result
 
 
 def latest_run(history: Path, key: str) -> dict | None:
@@ -365,15 +405,21 @@ def latest_run(history: Path, key: str) -> dict | None:
 # --- the report ----------------------------------------------------------------
 
 
-def row_icon(change: str, flaky: str = "") -> str:
+def row_icon(change: str, flaky: str = "", retry: str = "") -> str:
     """
-    The emoji a test's row starts with: its change, if any, then 🎲 when it is
-    flaky — added to the change, never instead of it. Each with a tooltip.
+    The emoji a test's row starts with: its change, if any, 🟠 when it passed on
+    retry, then 🎲 when it is flaky — added to the others, never instead of them.
+    The one exception is 🟢: a fix that needed a retry shows 🟠 alone, the pass
+    being the less certain part. Each with a tooltip.
     """
+    if retry == "passed" and change == "fixed":
+        change = ""
     icons = ""
     if change in CHANGES:
         icon, _, _, meaning = CHANGES[change]
         icons += f'<span class="change change--{change}" title="{escape(meaning)}">{icon}</span>'
+    if retry == "passed":
+        icons += f'<span class="change change--retried" title="{escape(RETRIED["passed"])}">{RETRY_ICON}</span>'
     if flaky:
         icons += f'<span class="change change--flaky" title="{escape(flaky)}">{FLAKY_ICON}</span>'
     return f"{icons} " if icons else ""
@@ -394,13 +440,21 @@ def panel_html(run: Run, history_link: str) -> str:
         if flaky
         else ""
     )
+    retried = len(run.passed_on_retry())
+    retry_note = (
+        f'<span title="{escape(RETRIED["passed"])}">{RETRY_ICON} {retried} '
+        "passed on retry</span>"
+        if retried
+        else ""
+    )
+    notes = [note for note in (retry_note, flaky_note) if note]
     if run.baseline is None:
         text = (
             f"First run with these filters ({escape(run.label)}): nothing to "
             "compare with yet."
         )
-        if flaky_note:
-            text += f" · {flaky_note}"
+        if notes:
+            text += f" · {' · '.join(notes)}"
     else:
         commit = run.baseline.get("commit")
         compared = _when(run.baseline.get("started", ""))
@@ -414,8 +468,7 @@ def panel_html(run: Run, history_link: str) -> str:
             for change, count in counts.items()
             if count
         ]
-        if flaky_note:
-            found.append(flaky_note)
+        found.extend(notes)
         text = (
             f"Since the run of {escape(compared)}, same filters: "
             f"{' · '.join(found) if found else 'no change'}"
@@ -554,8 +607,11 @@ def write_index(history: Path) -> None:
             except (OSError, ValueError):
                 continue
             label = data.get("label", label)
-            outcomes = [r["outcome"] for r in data.get("results", {}).values()]
+            results = data.get("results", {}).values()
+            outcomes = [r["outcome"] for r in results]
             failed = sum(o in KO for o in outcomes)
+            retried = sum(r.get("retry") == "passed" for r in results)
+            on_retry = f" ({retried} on retry)" if retried else ""
             changes = data.get("changes", {})
             moved = " ".join(
                 f"{CHANGES[c][0]} {n}" for c, n in changes.items() if n and c in CHANGES
@@ -565,7 +621,7 @@ def write_index(history: Path) -> None:
                 f'<tr><td><a href="{escape(key.name)}/{escape(folder.name)}/index.html">'
                 f"{escape(_when(data.get('started', folder.name)))}</a></td>"
                 f"<td>{escape(data.get('commit', ''))}</td>"
-                f"<td>{len(outcomes) - failed} passed, {failed} failed</td>"
+                f"<td>{len(outcomes) - failed} passed{on_retry}, {failed} failed</td>"
                 f"<td>{moved}</td>"
                 f"<td>{f'{FLAKY_ICON} {flaky}' if flaky else ''}</td></tr>"
             )
