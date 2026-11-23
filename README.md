@@ -176,6 +176,29 @@ Every run writes `reports/`, a self-contained folder: `index.html` plus the fail
 
 CI publishes the latest run to **[the live report](https://heghon.github.io/Pytest-playwright-demo/)**, where each failure also gets a one-click link into the [Playwright trace viewer](https://trace.playwright.dev/) — no download, no terminal. The same bundle is attached to every run as the `playwright-report` artifact if you'd rather read it offline.
 
+Right under the title, round charts give the numbers at a glance: one for the
+whole run, then one per folder of `features/` (api, automation…), each with its
+passes in the middle. Green passed, orange passed on retry, red failed, grey
+skipped; hover a segment for its count.
+
+### Retried failures
+
+A test that fails is run once more, 2 seconds later, and the report shows what
+that retry found:
+
+- **Passed on retry**: the test counts as passed, but its result shows as an
+  orange **● Passed** with a 🟠, and the top line counts them. Its details open
+  on the first attempt's error, screenshot, video and trace.
+- **Failed twice, same error** (same step, same message): one ordinary failure,
+  with a line saying the retry confirmed it.
+- **Failed twice, differently**: both failures are shown, each with its evidence.
+
+To run without the retry, for a quick answer while you're fixing something:
+
+```bash
+pytest --reruns=0
+```
+
 ### What changed since the last run
 
 A line at the top of the report compares the run with the previous one that used
@@ -187,7 +210,7 @@ table. A test that stays green, or stays red, isn't mentioned.
 A 🎲 is added to the row of any **flaky** test: one whose outcome flipped between
 pass and fail at least twice across its recent runs, whatever their filters.
 Its tooltip gives the evidence, including how many flips happened on the same
-code; the top line counts them too.
+code; the top line counts them too. A pass on retry counts as one flip.
 
 Every run is also archived in `report-history/`, one folder per set of filters,
 with an `index.html` listing them; on CI it's the `history/` page of the live

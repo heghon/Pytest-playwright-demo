@@ -12,7 +12,7 @@ from pytest_html import extras
 from pytest_metadata.plugin import metadata_key
 from pytest_rerunfailures import get_reruns_count
 
-from stepdefs import accessibility, history
+from stepdefs import accessibility, charts, history
 
 load_dotenv()
 
@@ -110,6 +110,7 @@ def _history_link(run) -> str:
 
 
 def pytest_runtest_logreport(report):
+    charts.TALLY.record(report)
     if history.CURRENT is not None:
         history.CURRENT.record(report, getattr(report, "scenario_name", ""))
 
@@ -1244,6 +1245,8 @@ _GROUPING_JS = """
 
 
 def pytest_html_results_summary(prefix, postfix):
+    # The pass counts as round charts, moved up under the title once in the page.
+    prefix.append(charts.section_html(charts.TALLY))
     # One line at the top: what changed since the last comparable run.
     if history.CURRENT is not None:
         prefix.append(

@@ -187,8 +187,11 @@ def test_results_file(tmp_path):
 # --- the archive ---------------------------------------------------------------
 
 
-def _archived(history, key, run_id, outcome="passed"):
+def _archived(history, key, run_id, outcome="passed", retry=""):
     """An archived run on disk: page, results, and one of each artifact."""
+    result = {"outcome": outcome, "name": ""}
+    if retry:
+        result["retry"] = retry
     folder = history / key / run_id
     artifacts = folder / "test-artifacts" / "t"
     artifacts.mkdir(parents=True)
@@ -206,7 +209,7 @@ def _archived(history, key, run_id, outcome="passed"):
                 .isoformat(),
                 "commit": "abc1234",
                 "changes": {"regression": 1, "fixed": 0, "new": 0},
-                "results": {"t": {"outcome": outcome, "name": ""}},
+                "results": {"t": result},
             }
         )
     )
@@ -505,3 +508,77 @@ def test_panel_flaky_first(tmp_path):
 def test_results_flaky(tmp_path):
     """results.json records which tests were flaky, for the history index."""
     assert _flaky_run(tmp_path).results()["flaky"] == ["t"]
+
+
+# --- retries -------------------------------------------------------------------
+
+
+def test_record_rerun(tmp_path):
+    """A failed attempt with a retry to come is noted, but its outcome isn't kept."""
+    run = _run(tmp_path)
+    run.record(SimpleNamespace(nodeid="t", when="call", outcome="rerun"))
+    assert run.outcomes == {}
+    assert run.retried == {"t": ""}
+
+
+def _retried_run(tmp_path, baseline=None):
+    """A run whose test "t" failed its first attempt and passed on retry."""
+    run = _run(tmp_path, baseline, t="passed")
+    run.commit = "abc"
+    run.retried["t"] = "passed"
+    return run
+
+
+def test_retry_flip(tmp_path):
+    """The failed first attempt counts as a flip, on the same code."""
+    found = _retried_run(tmp_path).flakiness_of("t", "passed")
+    assert (found.flips, found.same_code) == (1, 1)
+
+
+def test_retry_flaky(tmp_path):
+    """After a failure in an earlier run, a pass on retry makes the test 🎲."""
+    run = _retried_run(tmp_path)
+    run.observations = {"t": _seen("passed", "failed")}
+    assert set(run.flaky()) == {"t"}
+
+
+def test_row_retried():
+    """A fix that needed a retry shows 🟠, not 🟢."""
+    icons = row_icon("fixed", "", "passed")
+    assert ">🟠</span>" in icons
+    assert "🟢" not in icons
+
+
+def test_row_retried_new():
+    """🟠 is added to 🆕, and only a pass on retry gets it."""
+    icons = row_icon("new", "", "passed")
+    assert icons.index("🆕") < icons.index("🟠")
+    assert "🟠" not in row_icon("", "", "same")
+
+
+def test_panel_retried(tmp_path):
+    """The panel counts the passes on retry, even on a first run."""
+    assert "🟠 1 passed on retry" in panel_html(_retried_run(tmp_path), "")
+
+
+def test_results_retry(tmp_path):
+    """results.json records how the retry went, only for a retried test."""
+    run = _retried_run(tmp_path)
+    run.outcomes["u"] = "passed"
+    results = run.results()["results"]
+    assert results["t"]["retry"] == "passed"
+    assert "retry" not in results["u"]
+
+
+def test_observations_retry(tmp_path):
+    """An archived pass on retry reads as a failure, then the pass."""
+    _archived(tmp_path, "k", "2099-01-01T10-00-00Z", retry="passed")
+    found = load_observations(tmp_path)["t"]
+    assert [outcome for _, outcome, _ in found] == ["failed", "passed"]
+
+
+def test_index_retried(tmp_path):
+    """The history index says how many passes needed a retry."""
+    _archived(tmp_path, "k", "2099-01-01T10-00-00Z", retry="passed")
+    write_index(tmp_path)
+    assert "1 passed (1 on retry), 0 failed" in (tmp_path / "index.html").read_text()

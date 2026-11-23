@@ -16,19 +16,25 @@ from stepdefs.conftest import (
     _category_of,
     _cell_text,
     _drop_links_column,
+    _drop_playwright_extras,
     _engine_of,
+    _failure_of,
     _grouping_of,
     _insert_after_test,
     _jira_cell,
+    _mark_passed_on_retry,
     _media_src,
     _normalised_key,
     _publish_base_url,
     _relative_to_report,
+    _retry_extra,
+    _retry_verdict,
     _step_table,
     _steps_extra,
     _trace_extra,
     pytest_bdd_apply_tag,
     pytest_collection_modifyitems,
+    pytest_html_results_table_row,
     report_note,
 )
 
@@ -413,3 +419,94 @@ def test_steps_no_notes():
     """A step without notes is not clickable."""
     content = _steps_extra({"name": "s", "steps": [_step("passed")]})["content"]
     assert "step__head--clickable" not in content
+
+
+# --- retries -----------------------------------------------------------------
+
+
+def _failed(message, when="call"):
+    """A stand-in for a failed phase's report, its error in longrepr.reprcrash."""
+    crash = SimpleNamespace(message=message)
+    return SimpleNamespace(when=when, longrepr=SimpleNamespace(reprcrash=crash))
+
+
+def test_failure_step():
+    """A failure is placed at the step it happened on, with its first line."""
+    data = {"steps": [_step("passed"), _step("failed")]}
+    failure = _failure_of(_failed("TimeoutError: too slow\nCall log: ..."), data)
+    assert failure["where"] == "Given a step"
+    assert failure["message"] == "TimeoutError: too slow"
+
+
+def test_failure_phase():
+    """A test without steps is placed at the phase that failed."""
+    assert _failure_of(_failed("boom", when="setup"), None)["where"] == "during setup"
+
+
+def test_verdict_passed():
+    """A retry with no failure passed."""
+    assert _retry_verdict(_failure_of(_failed("boom"), None), None) == "passed"
+
+
+def test_verdict_same():
+    """Two failures that differ only by their numbers are the same failure."""
+    first = _failure_of(_failed("Timeout 30007ms exceeded."), None)
+    again = _failure_of(_failed("Timeout 30014ms exceeded."), None)
+    assert _retry_verdict(first, again) == "same"
+
+
+def test_verdict_different():
+    """Another message is another failure."""
+    first = _failure_of(_failed("Expected $29.99, got $0.00"), None)
+    again = _failure_of(_failed("Cart is empty"), None)
+    assert _retry_verdict(first, again) == "different"
+
+
+def _first_attempt(tmp_path, message="AssertionError: <wrong>"):
+    """The first attempt of a retried test, with a screenshot in its folder."""
+    (tmp_path / "test-failed-1.png").write_bytes(b"x")
+    return {**_failure_of(_failed(message), None), "folder": tmp_path}
+
+
+def test_retry_block_passed(tmp_path):
+    """A pass on retry shows the first attempt's error, escaped, and its evidence."""
+    content = _retry_extra("passed", _first_attempt(tmp_path), tmp_path)["content"]
+    assert "Failed on the first attempt, passed on retry" in content
+    assert "AssertionError: &lt;wrong&gt;" in content
+    assert "Screenshot on failure · first attempt" in content
+
+
+def test_retry_block_same(tmp_path):
+    """The same failure twice is a single line, without the first attempt's files."""
+    content = _retry_extra("same", _first_attempt(tmp_path), tmp_path)["content"]
+    assert "same step, same error" in content
+    assert "Screenshot" not in content
+
+
+def test_playwright_extras_dropped():
+    """pytest-playwright's own screenshot, video and trace go; our HTML stays."""
+    report = SimpleNamespace(
+        extras=[
+            {"format_type": "image", "name": "Screenshot"},
+            {"format_type": "video", "name": "Video"},
+            {"format_type": "url", "name": "Trace"},
+            {"format_type": "html", "name": None},
+        ]
+    )
+    _drop_playwright_extras(report)
+    assert report.extras == [{"format_type": "html", "name": None}]
+
+
+def test_rerun_row_dropped():
+    """A failed attempt that was retried gets no row."""
+    cells = ['<td class="col-result">Rerun</td>']
+    pytest_html_results_table_row(SimpleNamespace(outcome="rerun"), cells)
+    assert cells == []
+
+
+def test_retried_cell():
+    """A pass on retry keeps "Passed" in its cell, which turns orange by class."""
+    cells = ['<td class="col-result">Passed</td>']
+    _mark_passed_on_retry(cells)
+    assert 'class="col-result col-result--retried"' in cells[0]
+    assert ">Passed</td>" in cells[0]

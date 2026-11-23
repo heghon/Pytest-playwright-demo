@@ -320,6 +320,125 @@
   margin: 8px 0 0;
 }
 
+/*------------------
+ * Pass charts
+ *
+ * Built by stepdefs/charts.py and moved under the title. Segment colours are
+ * the only colour here, and each is named in the legend: green passed, orange
+ * passed on retry (the 🟠), red failed, grey skipped. Text stays in ink.
+ *------------------*/
+/* pytest-html gives the page a min-width of 800px, so on a phone the charts would
+   run off the screen. Capped at the screen's width, they wrap instead, and the
+   numbers are there without scrolling sideways. */
+.charts {
+  max-width: calc(100vw - 32px);
+  margin: 8px 0 20px;
+}
+
+.charts__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #444;
+}
+
+.charts__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.charts__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.charts__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 22px;
+}
+
+.charts__run,
+.charts__folder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.charts__run {
+  margin-right: 10px;
+}
+
+.charts__name {
+  max-width: 110px;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  color: #555;
+}
+
+.charts__run .charts__name {
+  font-weight: bold;
+  color: #333;
+}
+
+.donut {
+  position: relative;
+}
+
+.donut svg {
+  display: block;
+}
+
+.donut__seg {
+  fill: none;
+  cursor: help;
+}
+
+.donut__seg:hover {
+  opacity: 0.8;
+}
+
+.donut__centre {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: #222;
+}
+
+.donut__figure {
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.charts__run .donut__figure {
+  font-size: 22px;
+}
+
+.donut__unit {
+  font-size: 11px;
+  color: #666;
+}
+
+.donut__seg--passed { stroke: #1f9d55; }
+.donut__seg--retried { stroke: #f0a040; }
+.donut__seg--failed { stroke: #b8322a; }
+.donut__seg--skipped { stroke: #a3a7ad; }
+.charts__swatch--passed { background: #1f9d55; }
+.charts__swatch--retried { background: #f0a040; }
+.charts__swatch--failed { background: #b8322a; }
+.charts__swatch--skipped { background: #a3a7ad; }
+
 /* A failed attempt that was retried gets no row of its own (see conftest.py), so
    pytest-html's Reruns filter would only ever show 0, and its Retried one is
    pytest-retries', a plugin this project does not use. Both would read as "no
@@ -697,6 +816,27 @@
   #results-table .col-result--retried {
     color: #f0a040;
   }
+
+  .charts__legend,
+  .charts__name {
+    color: #a8adb5;
+  }
+
+  .charts__run .charts__name,
+  .donut__centre {
+    color: #e8eaed;
+  }
+
+  .donut__unit {
+    color: #8b9099;
+  }
+
+  .donut__seg--passed { stroke: #2fa860; }
+  .donut__seg--failed { stroke: #e05a4f; }
+  .donut__seg--skipped { stroke: #6b6f76; }
+  .charts__swatch--passed { background: #2fa860; }
+  .charts__swatch--failed { background: #e05a4f; }
+  .charts__swatch--skipped { background: #6b6f76; }
 
   .artifact--retry {
     border-left-color: #f0a040;
