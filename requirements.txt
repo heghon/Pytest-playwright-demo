@@ -8,7 +8,7 @@ attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
-axe-playwright-python==0.1.8
+axe-playwright-python==0.1.9
     # via -r requirements.in
 gherkin-official==42.0.1
     # via pytest-bdd
@@ -28,7 +28,7 @@ markupsafe==3.0.4
     # via
     #   jinja2
     #   mako
-packaging==26.3
+packaging==26.4
     # via
     #   pytest
     #   pytest-bdd
@@ -80,7 +80,7 @@ rpds-py==2026.9.1
     # via
     #   jsonschema
     #   referencing
-ruff==0.17.5
+ruff==0.17.6
     # via -r requirements.in
 six==1.17.0
     # via parse-type
